@@ -1,9 +1,10 @@
 import { create } from 'zustand';
-//import { createNoise3D } from 'simplex-noise';
+import { createNoise2D } from 'simplex-noise'; 
 
 const CHUNK_SIZE = 16;
-const WORLD_WIDTH_IN_CHUNKS = 4;
-const WORLD_HEIGHT_IN_CHUNKS = 2;
+const WORLD_WIDTH_IN_CHUNKS = 8;
+const WORLD_HEIGHT_IN_CHUNKS = 4;
+const TERRAIN_THICKNESS = 1; // ¡NUEVO! Grosor de nuestro mundo en vóxeles.
 
 interface TerrainState {
   chunkSize: number;
@@ -13,18 +14,37 @@ interface TerrainState {
   getVoxel: (x: number, y: number, z: number) => number;
 }
 
+// --- VERSIÓN 2.5D DE LA CREACIÓN DEL MUNDO ---
 function createInitialChunks(): Map<string, Uint8Array> {
   const chunks = new Map<string, Uint8Array>();
+  const noise2D = createNoise2D();
+
+  // El tamaño del mundo en chunks en el eje Z ahora es 1
   for (let cx = 0; cx < WORLD_WIDTH_IN_CHUNKS; cx++) {
     for (let cy = 0; cy < WORLD_HEIGHT_IN_CHUNKS; cy++) {
-      const chunkKey = `${cx},${cy},0`;
+      const cz = 0; // Forzamos un solo chunk de profundidad en Z
+      const chunkKey = `${cx},${cy},${cz}`;
       const chunkData = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE).fill(0);
-      if (cx === 1 && cy === 1) { // Ponemos la semilla en un chunk que no esté en el borde
-        const start = Math.floor(CHUNK_SIZE / 2) - 2;
-        const end = Math.floor(CHUNK_SIZE / 2) + 2;
-        for (let x = start; x < end; x++) for (let y = start; y < end; y++) for (let z = start; z < end; z++) {
-          const index = y * CHUNK_SIZE * CHUNK_SIZE + z * CHUNK_SIZE + x;
-          chunkData[index] = 1;
+      const chunkPos = { x: cx * CHUNK_SIZE, y: cy * CHUNK_SIZE, z: cz * CHUNK_SIZE };
+
+      // Iteramos en X e Y para el perfil del terreno
+      for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+        for (let ly = 0; ly < CHUNK_SIZE; ly++) {
+          const wx = chunkPos.x + lx;
+          const wy = chunkPos.y + ly;
+          
+          // Usamos ruido 2D para decidir si un pilar en (X, Y) existe
+          // El factor de escala (/30) controla el "zoom". Más pequeño = colinas más grandes.
+          const noiseValue = noise2D(wx / 30, wy / 20);
+
+          // Si el valor de ruido es mayor a un umbral, creamos un "pilar" de tierra
+          if (noiseValue > -0.2) {
+            // Creamos el pilar con el grosor definido
+            for (let lz = 0; lz < TERRAIN_THICKNESS; lz++) {
+              const index = lz * CHUNK_SIZE * CHUNK_SIZE + ly * CHUNK_SIZE + lx;
+              chunkData[index] = 1;
+            }
+          }
         }
       }
       chunks.set(chunkKey, chunkData);
