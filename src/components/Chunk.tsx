@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
-import { RigidBody, TrimeshCollider } from '@react-three/rapier';
+import { RigidBody, TrimeshCollider, interactionGroups } from '@react-three/rapier';
 import { Instances, Instance } from '@react-three/drei';
+import { MATERIALS } from './LevelUI'; 
+
+const TERRAIN_COLLISION_GROUP = interactionGroups(0b10, 0b1);
 
 // --- FUNCIÓN DE "MESHING" OPTIMIZADA ---
 function generateOptimizedChunkMesh(data: Uint8Array, chunkSize: number) {
@@ -64,15 +67,21 @@ interface ChunkProps {
 }
 
 export function Chunk({ data, position, chunkSize }: ChunkProps) {
+ 
   // Memoizamos tanto las instancias visuales como la malla de colisión
   const { visualInstances, physicsMesh } = useMemo(() => {
-    const instances: { pos: [number, number, number], key: number }[] = [];
+    const instances: { pos: [number, number, number], color: string, key: number }[] = [];
     for (let x = 0; x < chunkSize; x++) {
       for (let y = 0; y < chunkSize; y++) {
         for (let z = 0; z < chunkSize; z++) {
           const index = z * chunkSize * chunkSize + y * chunkSize + x;
-          if (data[index] === 1) {
-            instances.push({ pos: [x, y, z], key: index });
+          const materialId = data[index];
+          if (materialId !== 0) { // Si no es aire
+            instances.push({ 
+              pos: [x + 0.5, y + 0.5, z + 0.5],
+              color: MATERIALS[materialId] !== undefined ? String(MATERIALS[materialId]) : 'white',
+              key: index
+            });
           }
         }
       }
@@ -90,15 +99,18 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
       {/* --- LA GRAN OPTIMIZACIÓN --- */}
       {/* Un solo TrimeshCollider para todo el chunk */}
       {physicsMesh.vertices.length > 0 && (
-        <TrimeshCollider args={[physicsMesh.vertices, physicsMesh.indices]} />
+        <TrimeshCollider 
+        args={[physicsMesh.vertices, physicsMesh.indices]}
+        collisionGroups={TERRAIN_COLLISION_GROUP} />
       )}
       
       {/* El renderizado visual sigue siendo súper rápido con Instances */}
       <Instances>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="saddlebrown" />
-        {visualInstances.map(({ key, pos }) => (
-          <Instance key={key} position={[pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5]} />
+        <boxGeometry args={[1, 1, 1]} /> 
+       {/* --- Aplicamos el color del store --- */}
+        <meshStandardMaterial/>
+        {visualInstances.map(({ key, pos, color }) => (
+          <Instance key={key} position={pos} color={color} />
         ))}
       </Instances>
     </RigidBody>

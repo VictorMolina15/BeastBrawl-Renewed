@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { type ControlActions, Controls } from '../main';
 
-const MOVE_SPEED = 8;
-const JUMP_FORCE = 12;
+const MOVE_SPEED = 5;
+const JUMP_FORCE = 15;
 
 export function Player() {
   const rigidBodyRef = useRef<RapierRigidBody>(null!);
@@ -68,8 +68,9 @@ export function Player() {
       colliders={false}
       mass={1}
       lockRotations
-      position={[30, 85, 0.5]}
+      position={[0, 75, 0.5]}
       ccd={true} // continuous collision detection
+      enabledTranslations={[true, true, false]}
     >
       <CapsuleCollider 
         ref={playerColliderRef} 
@@ -78,7 +79,7 @@ export function Player() {
         restitution={0}
       />
       <mesh>
-        <capsuleGeometry args={[0.5, 0.75, 4, 8]} />
+        <capsuleGeometry args={[0.5, 0.75 * 2, 4, 8]} />
         <meshStandardMaterial color="royalblue" />
       </mesh>
     </RigidBody>

@@ -9,6 +9,19 @@ const TERRAIN_THICKNESS = 1; // ¡NUEVO! Grosor de nuestro mundo en vóxeles.
 interface TerrainState {
   chunkSize: number;
   chunks: Map<string, Uint8Array>;
+
+  // Nuevos estados para la UI
+  brushSize: number;
+  cubeColor: string;
+  mapId: number; 
+  selectedMaterialId: number;
+
+  // Nuevas acciones para la UI
+  setBrushSize: (size: number) => void;
+  setCubeColor: (color: string) => void;
+  generateNewMap: () => void;
+  setSelectedMaterialId: (id: number) => void;
+  
   destroyTerrain: (centerX: number, centerY: number, centerZ: number, radius: number) => void;
   createTerrain: (centerX: number, centerY: number, centerZ: number, radius: number) => void;
   getVoxel: (x: number, y: number, z: number) => number;
@@ -59,7 +72,7 @@ const modifyTerrain = (
   chunks: Map<string, Uint8Array>,
   chunkSize: number,
   centerX: number, centerY: number, centerZ: number, radius: number,
-  modifyValue: 0 | 1 // 0 para destruir, 1 para crear
+  modifyValue:  number
 ) => {
   const newChunks = new Map(chunks);
   const affectedChunks = new Map<string, Uint8Array>();
@@ -111,7 +124,29 @@ const modifyTerrain = (
 export const useTerrainStore = create<TerrainState>((set, get) => ({
   chunkSize: CHUNK_SIZE,
   chunks: createInitialChunks(),
+  selectedMaterialId: 1, // Por defecto, pintamos con "Tierra"
+
+  setSelectedMaterialId: (id) => set({ selectedMaterialId: id }),
   
+  // --- NUEVOS ESTADOS Y SUS VALORES INICIALES ---
+  brushSize: 5,
+  cubeColor: '#8B4513',
+  mapId: 0, // El ID del mapa actual
+
+  // --- NUEVAS ACCIONES ---
+  setBrushSize: (size) => set({ brushSize: size }),
+  setCubeColor: (color) => set({ cubeColor: color }),
+  
+  // --- generateNewMap MEJORADO ---
+  generateNewMap: () => {
+    console.log("Generando nuevo mapa...");
+    set((state) => ({ 
+      chunks: createInitialChunks(),
+      mapId: state.mapId + 1 // <-- Incrementamos el ID para forzar el reseteo
+    }));
+  },
+
+
   getVoxel: (x, y, z) => {
     // Convierte coordenadas del mundo a coordenadas del chunk
     const chunkX = Math.floor(x / CHUNK_SIZE);
@@ -141,8 +176,8 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   },
 
   createTerrain: (centerX, centerY, centerZ, radius) => {
-    const { chunks, chunkSize } = get();
-    const newChunks = modifyTerrain(chunks, chunkSize, centerX, centerY, centerZ, radius, 1);
+    const { chunks, chunkSize, selectedMaterialId } = get();
+    const newChunks = modifyTerrain(chunks, chunkSize, centerX, centerY, centerZ, radius, selectedMaterialId);
     set({ chunks: newChunks });
   },
 }));
