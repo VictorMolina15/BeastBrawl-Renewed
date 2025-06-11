@@ -75,8 +75,8 @@ export default function App() {
 
       <Canvas orthographic={isOrthographic} camera={{
         ...(isOrthographic
-          ? { position: [64, 40, 120], zoom: 10 } // Configuración para ortográfica
-          : { position: [64, 40, 120], fov: 60 }), // Configuración para perspectiva
+          ? { position: [0, 0, 120], zoom: 10 } // Configuración para ortográfica
+          : { position: [0, 0, 120], fov: 60 }), // Configuración para perspectiva
         rotation: [0, 0, 0]
       }} >
         <Physics debug gravity={[0, -20, 0]}>
