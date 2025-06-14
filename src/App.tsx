@@ -4,33 +4,10 @@ import { useTerrainStore } from './stores/useTerrainStore';
 import { Player } from './components/Player';
 import { Physics } from '@react-three/rapier';
 import { Chunk } from './components/Chunk';
-import { DoubleSide } from 'three';
 import { UI } from './components/LevelUI';
 import { useState, useEffect } from 'react';
 
-function ClickHandler() {
-  const createTerrain = useTerrainStore((state) => state.createTerrain);
-  const destroyTerrain = useTerrainStore((state) => state.destroyTerrain);
 
-  return (
-    <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
-      onClick={(e) => {
-        e.stopPropagation();
-        createTerrain(e.point.x, e.point.y, e.point.z, 5);
-      }}
-      onContextMenu={(e) => {
-        e.stopPropagation();
-        // --- LA CORRECCIÓN DEFINITIVA ---
-        e.nativeEvent.preventDefault();
-        destroyTerrain(e.point.x, e.point.y, e.point.z, 5);
-      }}
-    >
-      <planeGeometry args={[1000, 1000]} />
-      <meshStandardMaterial transparent opacity={0} side={DoubleSide} />
-    </mesh>
-  );
-}
 
 export default function App() {
   const chunks = useTerrainStore((state) => state.chunks);
@@ -40,16 +17,7 @@ export default function App() {
   const [isOrthographic, setIsOrthographic] = useState(true); // Empecemos en ortográfica
   const toggleCamera = () => setIsOrthographic(prev => !prev);
 
-  // Cuando se genera un nuevo mapa, queremos que el personaje se resetee.
-  // Por ahora, simplemente refrescaremos la página. Es la forma más simple.
-  useTerrainStore.subscribe(
-    (state, prevState) => {
-      if (state.chunks !== prevState.chunks) {
-        // Una forma simple de "resetear" todo
-        window.location.reload();
-      }
-    }
-  );
+ 
 
    // --- Lógica para el Modo Shift y la Cámara ---
   const [isShiftPressed, setIsShiftPressed] = useState(false);
@@ -97,8 +65,6 @@ export default function App() {
           enabled={isShiftPressed} 
           enableRotate={!isOrthographic} // En ortográfica, solo rota con Shift
           />
-          {/* <ClickHandler /> */}
-          {/* Vuelve a añadir tu ClickHandler cuando veas el terreno */}
           {/* --- UI de Depuración --- */}
           <Stats /> 
         </Physics>
