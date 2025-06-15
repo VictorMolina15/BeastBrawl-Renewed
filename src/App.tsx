@@ -6,6 +6,7 @@ import { Physics } from '@react-three/rapier';
 import { Chunk } from './components/Chunk';
 import { UI } from './components/LevelUI';
 import { useState, useEffect } from 'react';
+import { PlacementGrid } from './components/PlacementGrid';
 
 
 
@@ -51,15 +52,20 @@ export default function App() {
           <ambientLight intensity={0.5} />
           <directionalLight position={[100, 100, 100]} intensity={1.5} />
 
-          {Array.from(chunks.entries()).map(([key, data]) => {
+           {Array.from(chunks.entries()).map(([key, data]) => {          
+            const hasSolidVoxels = data.some(voxel => voxel > 0);
+            if (!hasSolidVoxels) {
+              return null;
+            }
             const [cx, cy, cz] = key.split(',').map(Number);
             const position: [number, number, number] = [cx * chunkSize, cy * chunkSize, cz * chunkSize];
+            // Solo renderiza el Chunk si pasó la comprobación.
             return <Chunk key={key} data={data} position={position} chunkSize={chunkSize} />;
           })}
-
+          <PlacementGrid />
           {/* --- Usamos mapId como key en el Player --- */}
           {/* Cuando mapId cambie, este componente se destruirá y se creará de nuevo */}
-          <Player key={mapId} />
+          {/* <Player key={mapId} /> */}
           <OrbitControls 
           key={isOrthographic ? 'ortho' : 'persp'}
           enabled={isShiftPressed} 

@@ -17,8 +17,8 @@ function generateGreedyChunkMesh(data: Uint8Array, chunkSize: number) {
 
   // Recorremos las 3 dimensiones (x, y, z)
   for (let d = 0; d < 3; d++) {
-    // Saltar el eje Z (d === 2)
-    if (d === 2) continue;
+    
+    //if (d === 2) continue; // Saltar el eje Z (d === 2) - Decidí comentar esta línea para incluir el eje Z y hacer pruebas con él.
 
     const u = (d + 1) % 3;
     const v = (d + 2) % 3;
@@ -103,73 +103,60 @@ interface ChunkProps {
 }
 
 export function Chunk({ data, position, chunkSize }: ChunkProps) {
-  // Obtenemos las funciones y el estado que necesitamos del store
   const createTerrain = useTerrainStore(state => state.createTerrain);
   const destroyTerrain = useTerrainStore(state => state.destroyTerrain);
   const brushSize = useTerrainStore(state => state.brushSize);
   const selectedMaterialId = useTerrainStore(state => state.selectedMaterialId);
 
-  const { visualInstances, physicsMesh } = useMemo(() => {
-    // La lógica para las instancias visuales sigue mostrando todos los cubos sólidos
-    const instances: { pos: [number, number, number]; key: string, materialId: number }[] = [];
-    for (let x = 0; x < chunkSize; x++) {
-      for (let y = 0; y < chunkSize; y++) {
-        for (let z = 0; z < chunkSize; z++) {
-          const materialId = data[z * chunkSize * chunkSize + y * chunkSize + x];
-          if (materialId !== 0) {
-            instances.push({ pos: [x, y, z], key: `${x}-${y}-${z}`, materialId });
-          }
-        }
-      }
-    }
+  // Ahora, la malla greedy se usará para física Y para visuales
+  const { geometry, physicsMesh } = useMemo(() => {
+    const meshData = generateGreedyChunkMesh(data, chunkSize);
+    
+    // Creamos una BufferGeometry para el renderizado visual
+    const visualGeometry = new THREE.BufferGeometry();
+    visualGeometry.setAttribute('position', new THREE.BufferAttribute(meshData.vertices, 3));
+    visualGeometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
+    visualGeometry.computeVertexNormals(); // Calculamos las normales para una iluminación correcta
 
-    // Llamamos a nuestra nueva función de Greedy Meshing
-    const mesh = generateGreedyChunkMesh(data, chunkSize);
-    return { visualInstances: instances, physicsMesh: mesh };
+    return { geometry: visualGeometry, physicsMesh: meshData };
   }, [data, chunkSize]);
 
-  const handleClick = (e: THREE.Intersection) => {
-    e.stopPropagation(); // Detenemos el evento para que no afecte a OrbitControls
-    if (!e.face) return;
-    // Para crear, calculamos la posición del nuevo vóxel añadiendo la normal
-    // Esto coloca el nuevo cubo "encima" de la cara en la que hemos hecho clic.
-    const newVoxelPos = new THREE.Vector3().copy(e.point).add(e.face.normal.clone().multiplyScalar(0.5));
-    createTerrain(newVoxelPos.x, newVoxelPos.y, brushSize, selectedMaterialId);
-  };
-
-  const handleContextMenu = (e: THREE.Intersection) => {
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+ const handleClick = (e: any) => {
     e.stopPropagation();
-    e.nativeEvent.preventDefault(); // Prevenimos el menú del navegador
     if (!e.face) return;
-    // Para destruir, calculamos la posición del vóxel existente restando la normal
-    // Esto nos da el centro del cubo cuya cara hemos clickeado.
+    const newVoxelPos = new THREE.Vector3().copy(e.point).add(e.face.normal.clone().multiplyScalar(0.5));
+    // Ya no sumamos la posición del chunk. e.point ya está en coordenadas del mundo.
+    createTerrain(newVoxelPos.x, newVoxelPos.y, brushSize, selectedMaterialId);
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const handleContextMenu = (e: any) => {
+    e.stopPropagation();
+    e.nativeEvent.preventDefault();
+    if (!e.face) return;
     const existingVoxelPos = new THREE.Vector3().copy(e.point).sub(e.face.normal.clone().multiplyScalar(0.5));
+    // Igual aquí, ya no sumamos la posición del chunk.
     destroyTerrain(existingVoxelPos.x, existingVoxelPos.y, brushSize);
-  };
+};
 
   return (
     <RigidBody type="fixed" colliders={false} position={position}>
-      {/* Usamos el TrimeshCollider con la malla de "cáscara hueca" optimizada */}
+      {/* El TrimeshCollider sigue usando los datos de la malla optimizada */}
       {physicsMesh.vertices.length > 0 && (
         <TrimeshCollider args={[physicsMesh.vertices, physicsMesh.indices]} />
       )}
 
-      {/* El renderizado visual con Instancias sigue siendo rápido */}
-      <Instances
-        limit={visualInstances.length}
-        onClick={(e) => handleClick(e as unknown as THREE.Intersection)}
-        onContextMenu={(e) => handleContextMenu(e as unknown as THREE.Intersection)}
+      {/* REEMPLAZO: Usamos un solo <mesh> con nuestra geometría optimizada */}
+      <mesh
+        geometry={geometry}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
       >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial />
-        {visualInstances.map(({ key, pos, materialId }) => (
-          <Instance
-            key={key}
-            position={[pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5]}
-            color={MATERIALS[materialId] || 'white'}
-          />
-        ))}
-      </Instances>
+        {/* Aquí puedes definir un material. Por ahora un meshStandardMaterial simple.
+            Colorear caras individuales en una malla greedy es más complejo, pero posible. */}
+        <meshStandardMaterial color="green" side={THREE.DoubleSide} />
+      </mesh>
     </RigidBody>
   );
 }
