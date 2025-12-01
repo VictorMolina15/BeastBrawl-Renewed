@@ -65,7 +65,7 @@ export default function App() {
           <PlacementGrid />
           {/* --- Usamos mapId como key en el Player --- */}
           {/* Cuando mapId cambie, este componente se destruirá y se creará de nuevo */}
-          {/* <Player key={mapId} /> */}
+          <Player key={mapId} />
           <OrbitControls 
           key={isOrthographic ? 'ortho' : 'persp'}
           enabled={isShiftPressed} 

@@ -17,6 +17,7 @@ interface TerrainState {
   setSelectedMaterialId: (id: number) => void;
   destroyTerrain: (centerX: number, centerY: number, radius: number) => void;
   createTerrain: (centerX: number, centerY: number, radius: number, materialId: number) => void;
+  getVoxel: (x: number, y: number, z: number) => number;
 }
 
 function createInitialChunks(): Map<string, Uint8Array> {
@@ -105,7 +106,7 @@ const modifyTerrain = (
 };
 
 
-export const useTerrainStore = create<TerrainState>((set) => ({
+export const useTerrainStore = create<TerrainState>((set, get) => ({
   chunkSize: CHUNK_SIZE,
   chunks: createInitialChunks(),
   selectedMaterialId: 1,
@@ -127,4 +128,25 @@ export const useTerrainStore = create<TerrainState>((set) => ({
       chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, materialId)
     }));
   },
+  // --- IMPLEMENTACIÓN DE getVoxel ---
+  getVoxel: (x: number, y: number, z: number) => {
+    const { chunks, chunkSize } = get();
+    // 1. Encontrar en qué chunk está esta coordenada global
+    const chunkX = Math.floor(x / chunkSize);
+    const chunkY = Math.floor(y / chunkSize);
+    const chunkZ = Math.floor(z / chunkSize); // Aunque sea 2.5D, calculamos Z por seguridad
+    const key = `${chunkX},${chunkY},${chunkZ}`;
+
+    // 2. Obtener el chunk
+    const chunkData = chunks.get(key);
+    if (!chunkData) return 0; // Si no existe el chunk (fuera del mapa), es aire
+
+    // 3. Calcular coordenada local dentro del chunk
+    const lx = x - chunkX * chunkSize;
+    const ly = y - chunkY * chunkSize;
+    const lz = z - chunkZ * chunkSize;
+
+    const index = lz * chunkSize * chunkSize + ly * chunkSize + lx;
+    return chunkData[index] || 0; // Retornar el valor o 0 si el índice es inválido
+  }
 }));
