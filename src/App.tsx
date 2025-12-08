@@ -49,7 +49,7 @@ export default function App() {
         rotation: [0, 0, 0]
       }} >
         <Physics debug gravity={[0, -20, 0]}>
-          <ambientLight intensity={0.5} />
+          <ambientLight intensity={1} />
           <directionalLight position={[100, 100, 100]} intensity={1.5} />
 
            {Array.from(chunks.entries()).map(([key, data]) => {          

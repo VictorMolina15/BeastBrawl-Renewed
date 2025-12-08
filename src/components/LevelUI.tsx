@@ -1,20 +1,11 @@
 import { useTerrainStore } from '../stores/useTerrainStore';
+import { MATERIALS_DB } from '../config/materials';
 
 // Props que este componente recibirá de App.tsx
 interface UIProps {
   isOrthographic: boolean;
   toggleCamera: () => void;
 }
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const MATERIALS: { [key: string]: number } = {
-  'Tierra': 1,
-  'Piedra': 2,
-  'Rojo': 3,
-  'Azul': 4,
-  'Verde': 5,
-  'Amarillo': 6,
-};
 
 export function UI({ isOrthographic, toggleCamera }: UIProps) {
  
@@ -70,20 +61,21 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
         </button>
       </div>
 
-      {/* 4. Cambiar color de los cubos */}
+     {/* 4. Cambiar color de los cubos (DINÁMICO) */}
       <div style={{ marginBottom: '10px' }}>
         <p>Material Actual:</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-          {Object.entries(MATERIALS).map(([name, id]) => (
+          {Object.values(MATERIALS_DB).map((mat) => (
             <button 
-              key={id} 
-              onClick={() => setSelectedMaterialId(id)}
+              key={mat.id} 
+              onClick={() => setSelectedMaterialId(mat.id)}
               style={{ 
                 padding: '5px 10px',
-                backgroundColor: selectedMaterialId === id ? 'dodgerblue' : '#555' 
+                backgroundColor: selectedMaterialId === mat.id ? 'dodgerblue' : '#555',
+                borderLeft: `5px solid ${mat.color}` // Detalle visual bonito
               }}
             >
-              {name}
+              {mat.name}
             </button>
           ))}
         </div>

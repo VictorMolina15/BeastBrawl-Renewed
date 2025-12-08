@@ -3,12 +3,14 @@ import { RigidBody, TrimeshCollider } from '@react-three/rapier';
 import { useTerrainStore } from '../stores/useTerrainStore';
 import * as THREE from 'three';
 import { mergeBufferGeometries } from 'three-stdlib';
-
+import { MATERIALS_DB } from '../config/materials';
 // ==========================================
 // 1. GEOMETRÍAS NATIVAS (Diseño Asimétrico)
 // ==========================================
 // Orientación Base: Todo "mira" o "sube" hacia la DERECHA (+X)
 const extrudeSettings = { depth: 1, bevelEnabled: false };
+const smoothSettings = { depth: 1, bevelEnabled: false, curveSegments: 8 }; 
+const radius = 0.3; 
 
 // A. CUBO
 const boxGeoVisual = new THREE.BoxGeometry(1, 1, 1);
@@ -32,11 +34,76 @@ trapShape.lineTo(0.5, 0.5);   // Arriba Der (Pared)
 trapShape.lineTo(0.1, 0.5);   // Medio Arriba (Inicio de la bajada suave)
 trapShape.lineTo(-0.5, -0.5);  // Medio Izq (Punto de quiebre)
 trapShape.lineTo(-0.5, -0.5); // Cerrar
-// Nota: Ajusta los puntos (0.0, 0.5) y (-0.5, 0.0) para cambiar la pendiente del suavizado.
 const trapGeoVisual = new THREE.ExtrudeGeometry(trapShape, extrudeSettings);
 trapGeoVisual.center();
 
-// D. LIMPIEZA PARA FÍSICA
+// D. ROUND FULL (Bloque solitario totalmente redondeado)
+
+const roundFullShape = new THREE.Shape();
+roundFullShape.moveTo(-0.5 + radius, 0.5);
+roundFullShape.lineTo(0.5 - radius, 0.5); // Top
+roundFullShape.quadraticCurveTo(0.5, 0.5, 0.5, 0.5 - radius); // Top-Right Corner
+roundFullShape.lineTo(0.5, -0.5 + radius); // Right
+roundFullShape.quadraticCurveTo(0.5, -0.5, 0.5 - radius, -0.5); // Bottom-Right Corner
+roundFullShape.lineTo(-0.5 + radius, -0.5); // Bottom
+roundFullShape.quadraticCurveTo(-0.5, -0.5, -0.5, -0.5 + radius); // Bottom-Left Corner
+roundFullShape.lineTo(-0.5, 0.5 - radius); // Left
+roundFullShape.quadraticCurveTo(-0.5, 0.5, -0.5 + radius, 0.5); // Top-Left Corner
+const roundFullGeo = new THREE.ExtrudeGeometry(roundFullShape, smoothSettings).center();
+
+// E. ROUND LEFT (Redondo a la izquierda, plano a la derecha) [ (--- ]
+const roundLeftShape = new THREE.Shape();
+roundLeftShape.moveTo(-0.5 + radius, 0.5);
+roundLeftShape.lineTo(0.5, 0.5);  // Top Flat
+roundLeftShape.lineTo(0.5, -0.5); // Right Flat
+roundLeftShape.lineTo(-0.5 + radius, -0.5);
+roundLeftShape.quadraticCurveTo(-0.5, -0.5, -0.5, -0.5 + radius); // Bottom-Left
+roundLeftShape.lineTo(-0.5, 0.5 - radius);
+roundLeftShape.quadraticCurveTo(-0.5, 0.5, -0.5 + radius, 0.5);   // Top-Left
+const roundLeftGeo = new THREE.ExtrudeGeometry(roundLeftShape, smoothSettings).center();
+
+// F. ROUND RIGHT (Plano a la izquierda, redondo a la derecha) [ ---) ]
+const roundRightShape = new THREE.Shape();
+roundRightShape.moveTo(-0.5, 0.5); // Top Flat
+roundRightShape.lineTo(0.5 - radius, 0.5);
+roundRightShape.quadraticCurveTo(0.5, 0.5, 0.5, 0.5 - radius);    // Top-Right
+roundRightShape.lineTo(0.5, -0.5 + radius);
+roundRightShape.quadraticCurveTo(0.5, -0.5, 0.5 - radius, -0.5);  // Bottom-Right
+roundRightShape.lineTo(-0.5, -0.5); // Bottom Flat
+roundRightShape.lineTo(-0.5, 0.5);  // Left Flat
+const roundRightGeo = new THREE.ExtrudeGeometry(roundRightShape, smoothSettings).center();
+
+// G. ROUND TOP (Capitel de Columna)
+const roundTopShape = new THREE.Shape();
+roundTopShape.moveTo(-0.5, 0.5 - radius); // Start Top-Left curve
+roundTopShape.quadraticCurveTo(-0.5, 0.5, -0.5 + radius, 0.5); // Curve to Top
+roundTopShape.lineTo(0.5 - radius, 0.5); // Top Line
+roundTopShape.quadraticCurveTo(0.5, 0.5, 0.5, 0.5 - radius); // Curve to Right
+roundTopShape.lineTo(0.5, -0.5); // Right Line Down
+roundTopShape.lineTo(-0.5, -0.5); // Bottom Line
+roundTopShape.lineTo(-0.5, 0.5 - radius); // Close
+const roundTopGeo = new THREE.ExtrudeGeometry(roundTopShape, smoothSettings).center();
+
+// H. ROUND BOTTOM (Base de Columna)
+const roundBottomShape = new THREE.Shape();
+roundBottomShape.moveTo(-0.5, 0.5); // Top Left
+roundBottomShape.lineTo(0.5, 0.5);  // Top Right
+roundBottomShape.lineTo(0.5, -0.5 + radius); // Right Down
+roundBottomShape.quadraticCurveTo(0.5, -0.5, 0.5 - radius, -0.5); // Curve Bottom Right
+roundBottomShape.lineTo(-0.5 + radius, -0.5); // Bottom Line
+roundBottomShape.quadraticCurveTo(-0.5, -0.5, -0.5, -0.5 + radius); // Curve Bottom Left
+roundBottomShape.lineTo(-0.5, 0.5); // Close
+const roundBottomGeo = new THREE.ExtrudeGeometry(roundBottomShape, smoothSettings).center();
+
+// TOPPER DE PASTO (Una "gorra" que va encima)
+// Es un poco más ancha que 1x1 para que sobresalga
+const topShape = new THREE.Shape();
+topShape.moveTo(-0.55, -0.1); 
+topShape.lineTo(0.55, -0.1); 
+topShape.lineTo(0.55, 0.1); 
+topShape.lineTo(-0.55, 0.1); 
+
+// LIMPIEZA PARA FÍSICA
 const cleanGeometry = (geo: THREE.BufferGeometry) => {
   const clean = geo.clone().toNonIndexed();
   if (clean.attributes.uv) clean.deleteAttribute('uv');
@@ -49,12 +116,74 @@ const planePhys = cleanGeometry(new THREE.PlaneGeometry(1, 1));
 const rampGeoPhys = cleanGeometry(rampGeoVisual);
 const trapGeoPhys = cleanGeometry(trapGeoVisual);
 
-
 interface ChunkProps {
   data: Uint8Array;
   position: [number, number, number];
   chunkSize: number;
 }
+
+type RenderGroup = {
+  cubes: THREE.Matrix4[];
+  ramps: THREE.Matrix4[];
+  traps: THREE.Matrix4[];
+  roundFull: THREE.Matrix4[];
+  roundLeft: THREE.Matrix4[];
+  roundRight: THREE.Matrix4[];
+  roundTop: THREE.Matrix4[];
+  roundBottom: THREE.Matrix4[];
+
+};
+
+// ==========================================
+// 2. SUB-COMPONENTE: CHUNK LAYER
+// Se encarga de renderizar UN material específico.
+// ==========================================
+const ChunkLayer = ({ matId, group, onClick, onContext }: { 
+  matId: number, 
+  group: RenderGroup, 
+  onClick: (e: unknown) => void, 
+  onContext: (e: unknown) => void 
+}) => {
+  const refs = useRef<Record<string, THREE.InstancedMesh>>(null!);
+  
+  if (!refs.current) refs.current = {};
+
+  const materialInfo = MATERIALS_DB[matId] || { color: '#ff00ff' };
+
+  const updateRef = (key: keyof RenderGroup, matrices: THREE.Matrix4[]) => {
+    const mesh = refs.current[key];
+    if (mesh && matrices.length > 0) {
+        for (let i = 0; i < matrices.length; i++) mesh.setMatrixAt(i, matrices[i]);
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.geometry) mesh.computeBoundingSphere();
+    }
+  };
+
+  useLayoutEffect(() => {
+    (Object.keys(group) as Array<keyof RenderGroup>).forEach(key => updateRef(key, group[key]));
+  }, [group]);
+
+  return (
+    <group>
+      {group.cubes.length > 0 && <instancedMesh ref={(el) => { refs.current.cubes = el! }} args={[boxGeoVisual, undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.ramps.length > 0 && <instancedMesh ref={(el) => { refs.current.ramps = el! }} args={[rampGeoVisual, undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.traps.length > 0 && <instancedMesh ref={(el) => { refs.current.traps = el! }} args={[trapGeoVisual, undefined, group.traps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      
+      {group.roundFull.length > 0 && <instancedMesh ref={(el) => { refs.current.roundFull = el! }} args={[roundFullGeo, undefined, group.roundFull.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.roundLeft.length > 0 && <instancedMesh ref={(el) => { refs.current.roundLeft = el! }} args={[roundLeftGeo, undefined, group.roundLeft.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.roundRight.length > 0 && <instancedMesh ref={(el) => { refs.current.roundRight = el! }} args={[roundRightGeo, undefined, group.roundRight.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.roundTop.length > 0 && <instancedMesh ref={(el) => { refs.current.roundTop = el! }} args={[roundTopGeo, undefined, group.roundTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.roundBottom.length > 0 && <instancedMesh ref={(el) => { refs.current.roundBottom = el! }} args={[roundBottomGeo, undefined, group.roundBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+
+      {/* He quitado el pasto temporalmente como pediste, pero si lo descomentas, usa también { } */}
+      {/* {group.grassTops.length > 0 && <instancedMesh ref={(el) => { refs.current.grassTops = el! }} ... />} */}
+    </group>
+  );
+};
+
+// ==========================================
+// 3. COMPONENTE PRINCIPAL: CHUNK
+// ==========================================
 
 export function Chunk({ data, position, chunkSize }: ChunkProps) {
   const createTerrain = useTerrainStore(state => state.createTerrain);
@@ -63,9 +192,16 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
   const selectedMaterialId = useTerrainStore(state => state.selectedMaterialId);
   const getGlobalVoxel = useTerrainStore(state => state.getVoxel);
 
-  const cubesMeshRef = useRef<THREE.InstancedMesh>(null!);
-  const rampsMeshRef = useRef<THREE.InstancedMesh>(null!);
-  const trapsMeshRef = useRef<THREE.InstancedMesh>(null!);
+  const meshRefs = useRef<Record<number, { 
+    cubes: THREE.InstancedMesh | null, 
+    ramps: THREE.InstancedMesh | null, 
+    traps: THREE.InstancedMesh | null,
+    roundFull: THREE.InstancedMesh | null,
+    roundLeft: THREE.InstancedMesh | null,
+    roundRight: THREE.InstancedMesh | null,
+    roundTop: THREE.InstancedMesh | null,
+    roundBottom: THREE.InstancedMesh | null,
+  }>>({});
 
   // Helper functions
   const addFace = (geo: THREE.BufferGeometry, x: number, y: number, z: number, rot: number, axis: 'x'|'y', target: THREE.BufferGeometry[]) => {
@@ -78,17 +214,9 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
     target.push(p);
   };
 
-  const updateInstanced = (mesh: THREE.InstancedMesh, mats: THREE.Matrix4[]) => {
-    mats.forEach((m, i) => mesh.setMatrixAt(i, m));
-    mesh.instanceMatrix.needsUpdate = true;
-  };
-
-  const { counts, physicsData, matrices } = useMemo(() => {
+  const { renderGroups, physicsData } = useMemo(() => {
     const geometriesToMerge: THREE.BufferGeometry[] = [];
-    const matCubes: THREE.Matrix4[] = [];
-    const matRamps: THREE.Matrix4[] = [];
-    const matTraps: THREE.Matrix4[] = [];
-
+    const groups: Record<number, RenderGroup> = {};
     const dummy = new THREE.Object3D();
     const MODEL_SCALE = 1;
 
@@ -98,14 +226,17 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
       const wz = position[2] + lz;
       return getGlobalVoxel(wx, wy, wz) !== 0;
     };
-
-    const isSolidLocal = (index: number) => data[index] !== 0;
+    const getMaterial = (index: number) => data[index];
 
     for (let z = 0; z < chunkSize; z++) {
       for (let y = 0; y < chunkSize; y++) {
         for (let x = 0; x < chunkSize; x++) {
           const index = z * chunkSize * chunkSize + y * chunkSize + x;
-          if (!isSolidLocal(index)) continue;
+          const matId = getMaterial(index);
+          if (matId === 0) continue;
+          if (!groups[matId]) {
+            groups[matId] = { cubes: [], ramps: [], traps: [] , roundFull: [], roundLeft: [], roundRight: [], roundTop: [], roundBottom: []};
+          }
 
           // Vecinos Directos
           const top = isSolidGlobal(x, y + 1, z);
@@ -137,23 +268,24 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
             // 1. SUPERFICIE (Aire Arriba)
             // Si hay aire tanto arriba como abajo -> mantener CUBE
             if (!top && !bottom) {
-            shapeType = 'CUBE';
+                if (!left && !right) {
+                    shapeType = 'ROUND_FULL'; // Isla solitaria
+                } else if (!left && right) {
+                    shapeType = 'ROUND_LEFT'; // Inicio plataforma
+                } else if (left && !right) {
+                    shapeType = 'ROUND_RIGHT'; // Fin plataforma 
+                } else {
+                    shapeType = 'CUBE'; // Centro plataforma
+                }          
             }
+            
             // Si solo hay aire arriba -> considerar rampas/traps
             else if (!top) {
             // CASO A: ISLA / PICO (Aire a ambos lados)
             if (!left && !right) {
-               // ARREGLO DE LA "X": Solo es Trapecio si tiene soporte abajo.
                if (bottom) {
-               // Es una cima de montaña -> Trapecio Simétrico (o asimétrico rotado)
-               // Como nuestro trap es /¯|, podemos usar dos o simplemente dejarlo como Cubo si es de 1 de ancho.
-               // Según tu dibujo, el pico es /¯\ . Mi geometría base es /¯|. 
-               // Para simplificar, si es un pico de 1 bloque, lo dejamos CUBO o TRAPECIO según gusto.
-               // Vamos a ponerlo CUBO para evitar cosas raras en la X, o TRAP si quieres suavizar.
-               // Si quieres que la X sean cubos -> CUBE.
                shapeType = 'CUBE'; 
                } else {
-               // Bloque flotante 1x1 -> CUBE
                shapeType = 'CUBE';
                }
             }
@@ -187,11 +319,12 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
             }
             }
             
-            // 2. TECHO (Aire Abajo) - Solo evaluamos si todavía somos CUBO
-            // Nota: añadimos 'top' en la condición para evitar que el caso "aire arriba y abajo" sea modificado aquí.
+            // 2. TECHO (Aire Abajo) - Solo evaluamos si todavía somos CUBE
             if (shapeType === 'CUBE' && !bottom && top) {
-             // Lógica Invertida para suavizar techos
-             
+
+              if (!left && !right) {
+                 shapeType = 'ROUND_BOTTOM'; // Base de columna
+              }
              // CASO A: TECHO BAJANDO A DERECHA (Tierra Izq, Aire Der)
              if (left && !right) {
               // Miramos la diagonal inferior izquierda
@@ -209,36 +342,95 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
              // CASO B: TECHO BAJANDO A IZQUIERDA (Aire Izq, Tierra Der)
              else if (!left && right) {
               if (bottomRight) {
-                 shapeType = 'RAMP';
-                 dummy.rotation.x = Math.PI;
-                 dummy.rotation.y = 0;
+               shapeType = 'RAMP';
+               dummy.rotation.x = Math.PI;
+               dummy.rotation.y = 0;
               } else {
-                 shapeType = 'TRAP';
-                 dummy.rotation.x = Math.PI;
-                 dummy.rotation.y = 0;
+               shapeType = 'TRAP';
+               dummy.rotation.x = Math.PI;
+               dummy.rotation.y = 0;
               }
              }
             }
+            // 3. COLUMNA SUPERIOR (Aire Arriba, Suelo Abajo, Sin lados)
+          // Esto arregla el "Pilar" que querías redondeado arriba
+          else if (shapeType === 'CUBE' && !top && bottom && !left && !right) {
+              shapeType = 'ROUND_TOP';
+          }
 
-          dummy.updateMatrix();
+            // Convertir RAMP a TRAP si tiene otra rampa arriba o abajo en la misma dirección
+            if (shapeType === 'RAMP') {
+              const hasRampAbove = top && (
+              (left && !isSolidGlobal(x - 1, y + 1, z)) ||
+              (!left && !isSolidGlobal(x + 1, y + 1, z))
+              );
+              const hasRampBelow = bottom && (
+              (left && !isSolidGlobal(x - 1, y - 1, z)) ||
+              (!left && !isSolidGlobal(x + 1, y - 1, z))
+              );
+              
+              if (hasRampAbove || hasRampBelow) {
+              shapeType = 'TRAP';
+              }
+            }
 
-          // 3. ASIGNACIÓN A ARRAYS
+            dummy.updateMatrix();
+
+          // 3. ASIGNACIÓN A ARRAYS CORREGIDA
           if (shapeType === 'RAMP') {
-            matRamps.push(dummy.matrix.clone());
+            groups[matId].ramps.push(dummy.matrix.clone()); 
+            
             const g = rampGeoPhys.clone();
             g.applyMatrix4(dummy.matrix);
             geometriesToMerge.push(g);
           } 
           else if (shapeType === 'TRAP') {
-            matTraps.push(dummy.matrix.clone());
+            groups[matId].traps.push(dummy.matrix.clone());
+            
             const g = trapGeoPhys.clone();
             g.applyMatrix4(dummy.matrix);
             geometriesToMerge.push(g);
           }
+          else if (shapeType === 'ROUND_FULL') {
+            groups[matId].roundFull.push(dummy.matrix.clone());
+            // Para mantener coherencia con tu optimización, añadimos las caras manualmente:
+            addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
+            addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
+          }
+          else if (shapeType === 'ROUND_LEFT') {
+            groups[matId].roundLeft.push(dummy.matrix.clone());
+            addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
+            addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
+          }
+          else if (shapeType === 'ROUND_RIGHT') {
+            groups[matId].roundRight.push(dummy.matrix.clone());
+            addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
+            addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
+          }
+          else if (shapeType === 'ROUND_TOP'){
+            groups[matId].roundTop.push(dummy.matrix.clone());
+            addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
+            addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
+
+          }
+          else if (shapeType === 'ROUND_BOTTOM'){
+            groups[matId].roundBottom.push(dummy.matrix.clone());
+            addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
+            addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
+            addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
+          }
           else {
             // CUBE
-            matCubes.push(dummy.matrix.clone());
-            // Física optimizada (solo caras expuestas)
+            groups[matId].cubes.push(dummy.matrix.clone());
             if (!top) addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
             if (!bottom) addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
             if (!left) addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
@@ -263,18 +455,30 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
     }
 
     return {
-      counts: { cubes: matCubes.length, ramps: matRamps.length, traps: matTraps.length },
-      matrices: { cubes: matCubes, ramps: matRamps, traps: matTraps },
+      renderGroups: groups,
       physicsData: { vertices: finalVertices, indices: finalIndices }
     };
 
   }, [data, chunkSize, getGlobalVoxel, position]);
 
   useLayoutEffect(() => {
-    if (cubesMeshRef.current) updateInstanced(cubesMeshRef.current, matrices.cubes);
-    if (rampsMeshRef.current) updateInstanced(rampsMeshRef.current, matrices.ramps);
-    if (trapsMeshRef.current) updateInstanced(trapsMeshRef.current, matrices.traps);
-  }, [matrices]);
+    Object.keys(renderGroups).forEach(key => {
+      const matId = Number(key);
+      const group = renderGroups[matId];
+
+      const refs = meshRefs.current[matId];
+      if (refs) {
+        (Object.keys(group) as Array<keyof RenderGroup>).forEach(k => {
+
+            const mesh = refs[k];
+            if (mesh && group[k].length > 0) {
+                group[k].forEach((m, i) => mesh.setMatrixAt(i, m));
+                mesh.instanceMatrix.needsUpdate = true;
+            }
+        });
+      }
+    });
+  }, [renderGroups]);
 
   // Handlers (sin cambios)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -299,21 +503,22 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
         <TrimeshCollider args={[physicsData.vertices, physicsData.indices]} />
       )}
 
-      {counts.cubes > 0 && (
-        <instancedMesh ref={cubesMeshRef} args={[boxGeoVisual, undefined, counts.cubes]} onClick={handleClick} onContextMenu={handleContext}>
-          <meshStandardMaterial color="#8B4513" />
-        </instancedMesh>
-      )}
-      {counts.ramps > 0 && (
-        <instancedMesh ref={rampsMeshRef} args={[rampGeoVisual, undefined, counts.ramps]} onClick={handleClick} onContextMenu={handleContext}>
-          <meshStandardMaterial color="purple" />
-        </instancedMesh>
-      )}
-      {counts.traps > 0 && (
-        <instancedMesh ref={trapsMeshRef} args={[trapGeoVisual, undefined, counts.traps]} onClick={handleClick} onContextMenu={handleContext}>
-          <meshStandardMaterial color="cyan" />
-        </instancedMesh>
-      )}
+      {Object.keys(renderGroups).map((key) => {
+        const matId = Number(key);
+        // Inicializar refs para este material si no existen
+        if (!meshRefs.current[matId]) meshRefs.current[matId] = { cubes: null, ramps: null, traps: null, roundFull: null, roundLeft: null, 
+          roundRight: null, roundTop: null, roundBottom: null };
+        
+        return (
+          <ChunkLayer 
+            key={key} 
+            matId={matId} 
+            group={renderGroups[matId]} 
+            onClick={handleClick} 
+            onContext={handleContext} 
+          />
+        );
+      })}
     </RigidBody>
-  );
+    );
 }
