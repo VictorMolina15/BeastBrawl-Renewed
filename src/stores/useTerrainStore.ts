@@ -9,25 +9,35 @@ const TERRAIN_THICKNESS = 1;
 interface TerrainState {
   chunkSize: number;
   chunks: Map<string, Uint8Array>;
+  variations: Map<string, Uint8Array>;
   brushSize: number;
   selectedMaterialId: number;
+  selectedVariationId: number;
   mapId: number;
+  openPopupId: number | null;
+  showGrid: boolean;
   generateNewMap: () => void;
   setBrushSize: (size: number) => void;
   setSelectedMaterialId: (id: number) => void;
+  setSelectedVariationId: (id: number) => void;
   destroyTerrain: (centerX: number, centerY: number, radius: number) => void;
   createTerrain: (centerX: number, centerY: number, radius: number, materialId: number) => void;
   getVoxel: (x: number, y: number, z: number) => number;
+  getVariation: (x: number, y: number, z: number) => number;
+  setOpenPopupId: (id: number | null) => void;
+  toggleGrid: () => void;
 }
 
-function createInitialChunks(): Map<string, Uint8Array> {
+function createInitialChunks(): { chunks: Map<string, Uint8Array>; variations: Map<string, Uint8Array> } {
   const chunks = new Map<string, Uint8Array>();
+  const variations = new Map<string, Uint8Array>();
   const noise2D = createNoise2D();
 
   for (let cx = 0; cx < WORLD_WIDTH_IN_CHUNKS; cx++) {
     for (let cy = 0; cy < WORLD_HEIGHT_IN_CHUNKS; cy++) {
       const chunkKey = `${cx},${cy},0`;
       const chunkData = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE).fill(0);
+      const chunkVars = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE).fill(0); // Lleno de 0 (Variación "Normal")
       const chunkPos = { x: cx * CHUNK_SIZE, y: cy * CHUNK_SIZE };
 
       for (let lx = 0; lx < CHUNK_SIZE; lx++) {
@@ -39,14 +49,16 @@ function createInitialChunks(): Map<string, Uint8Array> {
             for (let lz = 0; lz < TERRAIN_THICKNESS; lz++) {
               const index = lz * CHUNK_SIZE * CHUNK_SIZE + ly * CHUNK_SIZE + lx;
               chunkData[index] = 1; // Material por defecto
+              chunkVars[index] = 0;
             }
           }
         }
       }
       chunks.set(chunkKey, chunkData);
+      variations.set(chunkKey, chunkVars);
     }
   }
-  return chunks;
+  return { chunks, variations };
 }
 
 // --- LÓGICA DE MODIFICACIÓN PRECISA Y RECONSTRUIDA ---
@@ -105,27 +117,41 @@ const modifyTerrain = (
   return newChunks;
 };
 
+const initialData = createInitialChunks();
 
 export const useTerrainStore = create<TerrainState>((set, get) => ({
   chunkSize: CHUNK_SIZE,
-  chunks: createInitialChunks(),
+  chunks: initialData.chunks,
+  variations: initialData.variations,
   selectedMaterialId: 1,
-  brushSize: 5,
+  selectedVariationId: 0,
+  brushSize: 1,
   mapId: 0,
+  openPopupId: null,
+  showGrid: true,
   setSelectedMaterialId: (id) => set({ selectedMaterialId: id }),
+  setSelectedVariationId: (id) => set({ selectedVariationId: id }),
   setBrushSize: (size) => set({ brushSize: size }),
-  generateNewMap: () => set((state) => ({ 
-      chunks: createInitialChunks(),
-      mapId: state.mapId + 1 
-  })),
+  setOpenPopupId: (id) => set({ openPopupId: id }),
+  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })), 
+  generateNewMap: () => {
+      const newData = createInitialChunks();
+      set((state) => ({ 
+          chunks: newData.chunks,
+          variations: newData.variations,
+          mapId: state.mapId + 1 
+      }));
+  },
   destroyTerrain: (centerX, centerY, radius) => {
     set((state) => ({
-      chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, 0)
+      chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, 0),
+      variations: modifyTerrain(state.variations, state.chunkSize, centerX, centerY, radius, 0)
     }));
   },
   createTerrain: (centerX, centerY, radius, materialId) => {
     set((state) => ({
-      chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, materialId)
+      chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, materialId),
+      variations: modifyTerrain(state.variations, state.chunkSize, centerX, centerY, radius, state.selectedVariationId)
     }));
   },
   // --- IMPLEMENTACIÓN DE getVoxel ---
@@ -134,12 +160,12 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
     // 1. Encontrar en qué chunk está esta coordenada global
     const chunkX = Math.floor(x / chunkSize);
     const chunkY = Math.floor(y / chunkSize);
-    const chunkZ = Math.floor(z / chunkSize); // Aunque sea 2.5D, calculamos Z por seguridad
+    const chunkZ = Math.floor(z / chunkSize);
     const key = `${chunkX},${chunkY},${chunkZ}`;
 
     // 2. Obtener el chunk
     const chunkData = chunks.get(key);
-    if (!chunkData) return 0; // Si no existe el chunk (fuera del mapa), es aire
+    if (!chunkData) return 0;
 
     // 3. Calcular coordenada local dentro del chunk
     const lx = x - chunkX * chunkSize;
@@ -147,6 +173,23 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
     const lz = z - chunkZ * chunkSize;
 
     const index = lz * chunkSize * chunkSize + ly * chunkSize + lx;
-    return chunkData[index] || 0; // Retornar el valor o 0 si el índice es inválido
+    return chunkData[index] || 0;
+  },
+  getVariation: (x: number, y: number, z: number) => {
+    const { variations, chunkSize } = get();
+    const chunkX = Math.floor(x / chunkSize);
+    const chunkY = Math.floor(y / chunkSize);
+    const chunkZ = Math.floor(z / chunkSize);
+    const key = `${chunkX},${chunkY},${chunkZ}`;
+
+    const variationData = variations.get(key);
+    if (!variationData) return 0;
+
+    const lx = x - chunkX * chunkSize;
+    const ly = y - chunkY * chunkSize;
+    const lz = z - chunkZ * chunkSize;
+
+    const index = lz * chunkSize * chunkSize + ly * chunkSize + lx;
+    return variationData[index] || 0;
   }
 }));

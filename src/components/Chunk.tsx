@@ -118,6 +118,7 @@ const trapGeoPhys = cleanGeometry(trapGeoVisual);
 
 interface ChunkProps {
   data: Uint8Array;
+  variations?: Uint8Array;
   position: [number, number, number];
   chunkSize: number;
 }
@@ -138,8 +139,8 @@ type RenderGroup = {
 // 2. SUB-COMPONENTE: CHUNK LAYER
 // Se encarga de renderizar UN material específico.
 // ==========================================
-const ChunkLayer = ({ matId, group, onClick, onContext }: { 
-  matId: number, 
+const ChunkLayer = ({ groupKey, group, onClick, onContext }: { 
+  groupKey: string,
   group: RenderGroup, 
   onClick: (e: unknown) => void, 
   onContext: (e: unknown) => void 
@@ -148,7 +149,16 @@ const ChunkLayer = ({ matId, group, onClick, onContext }: {
   
   if (!refs.current) refs.current = {};
 
-  const materialInfo = MATERIALS_DB[matId] || { color: '#ff00ff' };
+  const [matId, varId] = groupKey.split('_').map(Number);
+  
+  const materialDef = MATERIALS_DB[matId];
+  let color = '#ff00ff'; // Fallback rosa
+
+  if (materialDef) {
+      const variation = materialDef.variations?.[varId];
+      // Si existe la variación, usa su color, si no, el del material base
+      color = variation ? variation.color : materialDef.color;
+  }
 
   const updateRef = (key: keyof RenderGroup, matrices: THREE.Matrix4[]) => {
     const mesh = refs.current[key];
@@ -165,18 +175,16 @@ const ChunkLayer = ({ matId, group, onClick, onContext }: {
 
   return (
     <group>
-      {group.cubes.length > 0 && <instancedMesh ref={(el) => { refs.current.cubes = el! }} args={[boxGeoVisual, undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
-      {group.ramps.length > 0 && <instancedMesh ref={(el) => { refs.current.ramps = el! }} args={[rampGeoVisual, undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
-      {group.traps.length > 0 && <instancedMesh ref={(el) => { refs.current.traps = el! }} args={[trapGeoVisual, undefined, group.traps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.cubes.length > 0 && <instancedMesh ref={(el) => { refs.current.cubes = el! }} args={[boxGeoVisual, undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
+      {group.ramps.length > 0 && <instancedMesh ref={(el) => { refs.current.ramps = el! }} args={[rampGeoVisual, undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
+      {group.traps.length > 0 && <instancedMesh ref={(el) => { refs.current.traps = el! }} args={[trapGeoVisual, undefined, group.traps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
       
-      {group.roundFull.length > 0 && <instancedMesh ref={(el) => { refs.current.roundFull = el! }} args={[roundFullGeo, undefined, group.roundFull.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
-      {group.roundLeft.length > 0 && <instancedMesh ref={(el) => { refs.current.roundLeft = el! }} args={[roundLeftGeo, undefined, group.roundLeft.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
-      {group.roundRight.length > 0 && <instancedMesh ref={(el) => { refs.current.roundRight = el! }} args={[roundRightGeo, undefined, group.roundRight.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
-      {group.roundTop.length > 0 && <instancedMesh ref={(el) => { refs.current.roundTop = el! }} args={[roundTopGeo, undefined, group.roundTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
-      {group.roundBottom.length > 0 && <instancedMesh ref={(el) => { refs.current.roundBottom = el! }} args={[roundBottomGeo, undefined, group.roundBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={materialInfo.color} /></instancedMesh>}
+      {group.roundFull.length > 0 && <instancedMesh ref={(el) => { refs.current.roundFull = el! }} args={[roundFullGeo, undefined, group.roundFull.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
+      {group.roundLeft.length > 0 && <instancedMesh ref={(el) => { refs.current.roundLeft = el! }} args={[roundLeftGeo, undefined, group.roundLeft.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
+      {group.roundRight.length > 0 && <instancedMesh ref={(el) => { refs.current.roundRight = el! }} args={[roundRightGeo, undefined, group.roundRight.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
+      {group.roundTop.length > 0 && <instancedMesh ref={(el) => { refs.current.roundTop = el! }} args={[roundTopGeo, undefined, group.roundTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
+      {group.roundBottom.length > 0 && <instancedMesh ref={(el) => { refs.current.roundBottom = el! }} args={[roundBottomGeo, undefined, group.roundBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><meshStandardMaterial color={color} /></instancedMesh>}
 
-      {/* He quitado el pasto temporalmente como pediste, pero si lo descomentas, usa también { } */}
-      {/* {group.grassTops.length > 0 && <instancedMesh ref={(el) => { refs.current.grassTops = el! }} ... />} */}
     </group>
   );
 };
@@ -185,23 +193,14 @@ const ChunkLayer = ({ matId, group, onClick, onContext }: {
 // 3. COMPONENTE PRINCIPAL: CHUNK
 // ==========================================
 
-export function Chunk({ data, position, chunkSize }: ChunkProps) {
+export function Chunk({ data, variations,position, chunkSize }: ChunkProps) {
   const createTerrain = useTerrainStore(state => state.createTerrain);
   const destroyTerrain = useTerrainStore(state => state.destroyTerrain);
   const brushSize = useTerrainStore(state => state.brushSize);
   const selectedMaterialId = useTerrainStore(state => state.selectedMaterialId);
   const getGlobalVoxel = useTerrainStore(state => state.getVoxel);
 
-  const meshRefs = useRef<Record<number, { 
-    cubes: THREE.InstancedMesh | null, 
-    ramps: THREE.InstancedMesh | null, 
-    traps: THREE.InstancedMesh | null,
-    roundFull: THREE.InstancedMesh | null,
-    roundLeft: THREE.InstancedMesh | null,
-    roundRight: THREE.InstancedMesh | null,
-    roundTop: THREE.InstancedMesh | null,
-    roundBottom: THREE.InstancedMesh | null,
-  }>>({});
+ 
 
   // Helper functions
   const addFace = (geo: THREE.BufferGeometry, x: number, y: number, z: number, rot: number, axis: 'x'|'y', target: THREE.BufferGeometry[]) => {
@@ -216,7 +215,7 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
 
   const { renderGroups, physicsData } = useMemo(() => {
     const geometriesToMerge: THREE.BufferGeometry[] = [];
-    const groups: Record<number, RenderGroup> = {};
+    const groups: Record<string, RenderGroup> = {};
     const dummy = new THREE.Object3D();
     const MODEL_SCALE = 1;
 
@@ -227,6 +226,7 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
       return getGlobalVoxel(wx, wy, wz) !== 0;
     };
     const getMaterial = (index: number) => data[index];
+    const getVariation = (index: number) => variations ? variations[index] : 0;
 
     for (let z = 0; z < chunkSize; z++) {
       for (let y = 0; y < chunkSize; y++) {
@@ -234,8 +234,14 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
           const index = z * chunkSize * chunkSize + y * chunkSize + x;
           const matId = getMaterial(index);
           if (matId === 0) continue;
-          if (!groups[matId]) {
-            groups[matId] = { cubes: [], ramps: [], traps: [] , roundFull: [], roundLeft: [], roundRight: [], roundTop: [], roundBottom: []};
+          const varId = getVariation(index);
+          // Creamos la clave compuesta
+          const groupKey = `${matId}_${varId}`;
+          if (!groups[groupKey]) {
+            groups[groupKey] = { 
+                cubes: [], ramps: [], traps: [], 
+                roundFull: [], roundLeft: [], roundRight: [], roundTop: [], roundBottom: [],
+            };
           }
 
           // Vecinos Directos
@@ -378,21 +384,21 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
 
           // 3. ASIGNACIÓN A ARRAYS CORREGIDA
           if (shapeType === 'RAMP') {
-            groups[matId].ramps.push(dummy.matrix.clone()); 
+            groups[groupKey].ramps.push(dummy.matrix.clone()); 
             
             const g = rampGeoPhys.clone();
             g.applyMatrix4(dummy.matrix);
             geometriesToMerge.push(g);
           } 
           else if (shapeType === 'TRAP') {
-            groups[matId].traps.push(dummy.matrix.clone());
+            groups[groupKey].traps.push(dummy.matrix.clone());
             
             const g = trapGeoPhys.clone();
             g.applyMatrix4(dummy.matrix);
             geometriesToMerge.push(g);
           }
           else if (shapeType === 'ROUND_FULL') {
-            groups[matId].roundFull.push(dummy.matrix.clone());
+            groups[groupKey].roundFull.push(dummy.matrix.clone());
             // Para mantener coherencia con tu optimización, añadimos las caras manualmente:
             addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
@@ -400,21 +406,21 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
             addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
           }
           else if (shapeType === 'ROUND_LEFT') {
-            groups[matId].roundLeft.push(dummy.matrix.clone());
+            groups[groupKey].roundLeft.push(dummy.matrix.clone());
             addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
             addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
           }
           else if (shapeType === 'ROUND_RIGHT') {
-            groups[matId].roundRight.push(dummy.matrix.clone());
+            groups[groupKey].roundRight.push(dummy.matrix.clone());
             addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
             addFace(planePhys, x+0.5, y, z, -Math.PI/2, 'y', geometriesToMerge);
           }
           else if (shapeType === 'ROUND_TOP'){
-            groups[matId].roundTop.push(dummy.matrix.clone());
+            groups[groupKey].roundTop.push(dummy.matrix.clone());
             addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
@@ -422,7 +428,7 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
 
           }
           else if (shapeType === 'ROUND_BOTTOM'){
-            groups[matId].roundBottom.push(dummy.matrix.clone());
+            groups[groupKey].roundBottom.push(dummy.matrix.clone());
             addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
             addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
@@ -430,7 +436,7 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
           }
           else {
             // CUBE
-            groups[matId].cubes.push(dummy.matrix.clone());
+            groups[groupKey].cubes.push(dummy.matrix.clone());
             if (!top) addFace(planePhys, x, y+0.5, z, -Math.PI/2, 'x', geometriesToMerge);
             if (!bottom) addFace(planePhys, x, y-0.5, z, Math.PI/2, 'x', geometriesToMerge);
             if (!left) addFace(planePhys, x-0.5, y, z, Math.PI/2, 'y', geometriesToMerge);
@@ -459,26 +465,9 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
       physicsData: { vertices: finalVertices, indices: finalIndices }
     };
 
-  }, [data, chunkSize, getGlobalVoxel, position]);
+  }, [data, variations, chunkSize, getGlobalVoxel, position]);
 
-  useLayoutEffect(() => {
-    Object.keys(renderGroups).forEach(key => {
-      const matId = Number(key);
-      const group = renderGroups[matId];
 
-      const refs = meshRefs.current[matId];
-      if (refs) {
-        (Object.keys(group) as Array<keyof RenderGroup>).forEach(k => {
-
-            const mesh = refs[k];
-            if (mesh && group[k].length > 0) {
-                group[k].forEach((m, i) => mesh.setMatrixAt(i, m));
-                mesh.instanceMatrix.needsUpdate = true;
-            }
-        });
-      }
-    });
-  }, [renderGroups]);
 
   // Handlers (sin cambios)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -504,16 +493,11 @@ export function Chunk({ data, position, chunkSize }: ChunkProps) {
       )}
 
       {Object.keys(renderGroups).map((key) => {
-        const matId = Number(key);
-        // Inicializar refs para este material si no existen
-        if (!meshRefs.current[matId]) meshRefs.current[matId] = { cubes: null, ramps: null, traps: null, roundFull: null, roundLeft: null, 
-          roundRight: null, roundTop: null, roundBottom: null };
-        
         return (
           <ChunkLayer 
             key={key} 
-            matId={matId} 
-            group={renderGroups[matId]} 
+            groupKey={key} 
+            group={renderGroups[key]} 
             onClick={handleClick} 
             onContext={handleContext} 
           />

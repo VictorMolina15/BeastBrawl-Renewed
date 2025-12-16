@@ -1,0 +1,257 @@
+/* --- UI DEL EDITOR DE NIVEL --- */
+
+/* Contenedor Principal (Flotante abajo) */
+.editor-hud {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 850px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  z-index: 1000;
+  user-select: none;
+}
+
+/* Fila Superior: Controles Principales */
+.hud-main-row {
+  display: flex;
+  background-color: #1a1a1a;
+  border-radius: 12px;
+  padding: 10px 20px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  align-items: center;
+  gap: 20px;
+  border: 1px solid #333;
+}
+
+.editor-hud, .hud-main-row {
+    overflow: visible !important; 
+}
+/* Sección del Pincel */
+.brush-section {
+  display: flex;
+  flex-direction: column;
+  width: 180px;
+  gap: 5px;
+}
+
+.brush-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ddd;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.brush-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none; 
+  appearance: none; 
+  background: #444;
+  transition: background 0.2s;
+}
+
+
+.brush-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #ddd;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.brush-slider::-webkit-slider-thumb:hover {
+  background: #fff;
+}
+
+/* Sección de Materiales (Scroll Horizontal) */
+.materials-strip {
+  display: flex;
+  gap: 8px;
+  padding: 15px 10px;
+  overflow-x: auto; 
+  overflow-y: visible; /* Permitir que salga por arriba */
+  scrollbar-width: none; /* Firefox */
+}
+.materials-strip::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+/* Botón de Material */
+.mat-btn {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid #444;
+  background-color: #2a2a2a;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: visible; 
+}
+
+.mat-btn:hover {
+  transform: translateY(-3px);
+  border-color: #666;
+}
+
+.mat-btn.active {
+  border-color: #fff;
+  transform: translateY(-5px);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+  z-index: 10;
+}
+
+/* Icono de color dentro del botón */
+.mat-preview {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+}
+
+.mat-name {
+  font-size: 0.6rem;
+  margin-top: 2px;
+  color: #aaa;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+
+/* --- BURBUJA DE VARIACIONES (POPUP) --- */
+.popover-trigger {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 22px;
+    height: 22px;
+    background-color: #333;
+    border: 2px solid #555;
+    color: #aaa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 20; /* Por encima del botón de material */
+    transition: all 0.2s ease;
+    opacity: 0; /* Oculto por defecto */
+}
+
+.mat-btn:hover .popover-trigger,
+.mat-btn.popup-open .popover-trigger {
+    opacity: 1;
+    top: -10px;
+    right: -10px;
+}
+
+.popover-trigger:hover {
+    background-color: #FFD700; /* Dorado al pasar el mouse */
+    color: #000;
+    border-color: #FFD700;
+    transform: rotate(90deg); /* Pequeña animación de giro */
+}
+
+.variation-popup {
+  position: fixed;
+  bottom: 150%; /* Encima del botón */
+  left: 50%;
+  height: fit-content;
+  transform: translate(-50%, -150%);
+  background-color: #1a1a1a;
+  border: 2px solid #FFD700; /* Borde dorado/amarillo */
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  gap: 6px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.6);
+  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  white-space: nowrap;
+  z-index: 100;
+  filter: drop-shadow(0 5px 15px rgba(0,0,0,0.8));
+}
+
+/* Triángulo de la burbuja */
+.variation-popup::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 8px;
+  border-style: solid;
+  border-color: #FFD700 transparent transparent transparent;
+  z-index: 100;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translate(-50%, -100%) scale(0.8); }
+  to { opacity: 1; transform: translate(-50%, -150%) scale(1); }
+}
+
+.var-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.var-btn:hover {
+  transform: scale(1.1);
+  border-color: rgba(255,255,255,0.5);
+}
+.var-btn.active-var {
+  border-color: #fff;
+  box-shadow: 0 0 10px rgba(255,255,255,0.5);
+}
+
+/* Fila Inferior: Botones de Acción */
+.hud-actions-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 20px; /* Estilo pastilla */
+  border: none;
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: white;
+  background: #333;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.1s;
+  text-transform: uppercase;
+}
+
+.action-btn:hover {
+  filter: brightness(1.2);
+}
+.action-btn:active {
+  transform: scale(0.95);
+}
+
+/* Colores específicos para botones de acción */
+.btn-purple { background: #9b59b6; }
+.btn-orange { background: #e67e22; }
+.btn-green { background: #2ecc71; }
+.btn-blue { background: #3498db; }
