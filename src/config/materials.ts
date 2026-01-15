@@ -3,63 +3,118 @@ export interface MaterialVariation {
   id: number;
   name: string;
   color: string;
-  textture?: string; // Ruta a la textura (opcional)
+  image?: string; // Thumbnail (opcional)
+  atlasPos?: { x: number, y: number };
 }
+
+export const ATLAS_CONFIG = {
+  cols: 16,
+  rows: 16,
+};
 
 export interface MaterialDef {
   id: number;
   name: string;
+  type: 'BASE' | 'GRASS' | 'PROP';
+  propShape?: 'CROSS' | 'MODEL';
   color: string; // Color base (fallback)
   hardness: number;
-  variations: Record<number, MaterialVariation>; // <--- NUEVO
+  atlasPos?: { x: number, y: number };
+  variations: Record<number, MaterialVariation>;
 }
 
 export const MATERIALS_DB: Record<number, MaterialDef> = {
-  1: { 
-    id: 1, 
-    name: 'Tierra', 
-    color: '#8B4513', 
+  1: {
+    id: 1,
+    name: 'Tierra',
+    type: 'BASE',
+    color: '#FFF',
+    atlasPos: { x: 0, y: 0 },
     hardness: 10,
     variations: {
-      0: { id: 0, name: 'Normal', color: '#8B4513' },
-      1: { id: 1, name: 'Otoñal', color: '#D2691E' }, // Naranja
-      2: { id: 2, name: 'Nevada', color: '#F0F8FF' }, // Blanco hielo
-      3: { id: 3, name: 'Pantanosa', color: '#2F4F4F' } // Verde oscuro
+      0: { id: 0, name: 'Normal', color: '#FFF', atlasPos: { x: 0, y: 0 } },
+      1: { id: 1, name: 'Otoñal', color: '#D2691E' },
     }
   },
-  2: { 
-    id: 2, name: 'Piedra', color: '#9DA6B3', hardness: 50,
+  2: {
+    id: 2,
+    name: 'Piedra',
+    type: 'BASE',
+    color: '#9DA6B3',
+    atlasPos: { x: 2, y: 0 },
+    hardness: 50,
     variations: {
-      0: { id: 0, name: 'Normal', color: '#9DA6B3' },
-      1: { id: 1, name: 'Musgosa', color: '#6B8E23' },
-      2: { id: 2, name: 'Rugosa', color: '#708090' },
-    }, 
+      0: { id: 0, name: 'Normal', color: '#FFF', atlasPos: { x: 2, y: 0 } },
+      1: { id: 1, name: 'Estilizada-1', color: '#FFF', atlasPos: { x: 3, y: 0 } },
+      2: { id: 2, name: 'Estilizada-2', color: '#FFF', atlasPos: { x: 4, y: 0 } },
+      3: { id: 3, name: 'Estilizada-3', color: '#FFF', atlasPos: { x: 5, y: 0 } },
+      4: { id: 4, name: 'Estilizada-4', color: '#FFF', atlasPos: { x: 6, y: 0 } },
+      5: { id: 5, name: 'Estilizada-5', color: '#FFF', atlasPos: { x: 7, y: 0 } },
+    },
   },
-  3: { id: 3, name: 'Ladrillo', color: '#B22222', hardness: 30,
+  3: {
+    id: 3,
+    name: 'Ladrillo',
+    type: 'BASE',
+    color: '#B22222',
+    hardness: 30,
     variations: {
       0: { id: 0, name: 'Rojo', color: '#B22222' },
       1: { id: 1, name: 'Marrón', color: '#8B4513' },
       2: { id: 2, name: 'Blanco', color: '#F5F5F5' },
     },
-   },
-  4: { id: 4, name: 'Agua', color: '#ADD8E6', hardness: 0,
+  },
+  4: {
+    id: 4,
+    name: 'Hielo',
+    type: 'BASE',
+    color: '#ADD8E6',
+    hardness: 20,
     variations: {
       0: { id: 0, name: 'Hielo Claro', color: '#ADD8E6' },
       1: { id: 1, name: 'Hielo Oscuro', color: '#4682B4' },
     },
-   },
-  5: { id: 5, name: 'Hierba', color: '#228B22', hardness: 5,
+  },
+  5: {
+    id: 5,
+    name: 'Pasto',
+    type: 'GRASS',
+    color: '#228B22',
+    atlasPos: { x: 1, y: 0 },
+    hardness: 5,
     variations: {
-      0: { id: 0, name: 'Verde', color: '#228B22' },
-      1: { id: 1, name: 'Seca', color: '#DEB887' },
+      0: { id: 0, name: 'Verde', color: '#37c237' },
+      1: { id: 1, name: 'Otoñal', color: '#f37d2a' }, // Naranja
+      2: { id: 2, name: 'Nevada', color: '#F0F8FF' }, // Blanco hielo
+      3: { id: 3, name: 'Pantanosa', color: '#3e7a7a' } // Verde oscuro
     },
-   },
-  6: { id: 6, name: 'Oro', color: '#FFD700', hardness: 100,
+  },
+  6: {
+    id: 6,
+    name: 'Oro',
+    type: 'BASE',
+    color: '#FFD700',
+    hardness: 100,
     variations: {
       0: { id: 0, name: 'Brillante', color: '#FFD700' },
       1: { id: 1, name: 'Mate', color: '#B8860B' },
-   },
-  }
+    },
+  },
+  7: {
+      id: 7,
+      name: 'Hierba Alta',
+      type: 'PROP',
+      propShape: 'CROSS',
+      color: '#00ff6a',   
+      hardness: 0,        
+      atlasPos: { x: 0, y:  8}, 
+      variations: {
+      0: { id: 0, name: 'Verde', color: '#37c237' },
+      1: { id: 1, name: 'Otoñal', color: '#f37d2a' }, // Naranja
+      2: { id: 2, name: 'Nevada', color: '#F0F8FF' }, // Blanco hielo
+      3: { id: 3, name: 'Pantanosa', color: '#3e7a7a' } // Verde oscuro
+      }
+  },
 };
 
 // Helper actualizado para obtener color específico

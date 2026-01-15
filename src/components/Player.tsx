@@ -68,7 +68,7 @@ export function Player() {
       colliders={false}
       mass={1}
       lockRotations
-      position={[0, 75, 0.5]}
+      position={[0, 75, 0]}
       ccd={true} // continuous collision detection
       enabledTranslations={[true, true, false]}
     >

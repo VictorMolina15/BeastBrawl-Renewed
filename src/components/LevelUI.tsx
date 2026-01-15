@@ -2,6 +2,7 @@ import { useTerrainStore } from '../stores/useTerrainStore';
 import { MATERIALS_DB } from '../config/materials';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { MaterialIcon } from './MaterialIcon';
 import '../styles/LevelEditorUI.css';
 
 interface UIProps {
@@ -21,7 +22,8 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
   const setOpenPopupId = useTerrainStore((state) => state.setOpenPopupId);
   
   const setSelectedMaterialId = useTerrainStore((state) => state.setSelectedMaterialId);
-  const setSelectedVariationId = useTerrainStore((state) => state.setSelectedVariationId);
+  const materialVariations = useTerrainStore((state) => state.materialVariations);
+  const setMaterialVariation = useTerrainStore((state) => state.setMaterialVariation);
 
   const toggleGrid = useTerrainStore((state) => state.toggleGrid); 
   const showGrid = useTerrainStore((state) => state.showGrid);     
@@ -93,19 +95,10 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
 
           <div className="materials-strip">
             {materials.map((mat) => {
+              const savedVariation = materialVariations[mat.id] || 0;
               const isSelected = selectedMaterialId === mat.id;
               const isPopupOpen = openPopupId === mat.id;
               const hasVariations = mat.variations && Object.keys(mat.variations).length > 1;
-
-              let previewColor = mat.color; // Por defecto: Color base
-              
-              if (isSelected) {
-                  // Si este material está seleccionado, intentamos mostrar su variación activa
-                  const activeVariation = mat.variations?.[selectedVariationId];
-                  if (activeVariation) {
-                      previewColor = activeVariation.color;
-                  }
-              }
 
               return (
                 <div 
@@ -113,7 +106,13 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
                   className={`mat-btn ${isSelected ? 'active' : ''} ${isPopupOpen ? 'popup-open' : ''}`}
                   onClick={() => handleSelectMaterial(mat.id)}
                 >
-                  <div className="mat-preview" style={{ backgroundColor: previewColor }} />
+                  <div className="mat-preview-container">
+                      <MaterialIcon 
+                          material={mat} 
+                          variationId={savedVariation}
+                          size={32} 
+                      />
+                  </div>
                   
                   <span className="mat-name">{mat.name}</span>
 
@@ -181,21 +180,34 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
             onClick={(e) => e.stopPropagation()}
         >
             {Object.values(activeMaterial.variations).map((variation) => {
-                const isActiveVar = selectedMaterialId === activeMaterial.id && selectedVariationId === variation.id;
-                return (
-                <div
-                    key={variation.id}
-                    className={`var-btn ${isActiveVar ? 'active-var' : ''}`}
-                    style={{ backgroundColor: variation.color }}
-                    title={variation.name}
-                    onClick={() => {
-                        setSelectedMaterialId(activeMaterial.id);
-                        setSelectedVariationId(variation.id);
-                        setOpenPopupId(null);
-                    }}
+          // Checamos si esta variación es la activa
+          const isActiveVar = selectedMaterialId === activeMaterial.id && selectedVariationId === variation.id;
+          
+          return (
+            <div
+                key={variation.id}
+                // Mantenemos la clase 'var-btn' para el layout y 'active-var' para el borde blanco
+                className={`var-btn ${isActiveVar ? 'active-var' : ''}`}
+                
+                // Tooltip nativo
+                title={variation.name}
+                
+                // Evento de click para seleccionar
+                onClick={() => {
+                  setMaterialVariation(activeMaterial.id, variation.id);
+                  setSelectedMaterialId(activeMaterial.id);
+                  setOpenPopupId(null); // Cierra el popup al elegir
+                }}
+            >
+                {/* ÚNICO CONTENIDO: El Icono con Textura + Tinte */}
+                <MaterialIcon
+                  material={activeMaterial}
+                  variationId={variation.id}
+                  size={40} 
                 />
-                );
-            })}
+            </div>
+          );
+      })}
         </div>,
         document.body
       )}

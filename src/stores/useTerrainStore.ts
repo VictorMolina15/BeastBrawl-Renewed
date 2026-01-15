@@ -10,6 +10,7 @@ interface TerrainState {
   chunkSize: number;
   chunks: Map<string, Uint8Array>;
   variations: Map<string, Uint8Array>;
+  materialVariations: Record<number, number>;
   brushSize: number;
   selectedMaterialId: number;
   selectedVariationId: number;
@@ -19,7 +20,7 @@ interface TerrainState {
   generateNewMap: () => void;
   setBrushSize: (size: number) => void;
   setSelectedMaterialId: (id: number) => void;
-  setSelectedVariationId: (id: number) => void;
+  setMaterialVariation: (matId: number, varId: number) => void;
   destroyTerrain: (centerX: number, centerY: number, radius: number) => void;
   createTerrain: (centerX: number, centerY: number, radius: number, materialId: number) => void;
   getVoxel: (x: number, y: number, z: number) => number;
@@ -123,14 +124,29 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   chunkSize: CHUNK_SIZE,
   chunks: initialData.chunks,
   variations: initialData.variations,
+  materialVariations: {},
   selectedMaterialId: 1,
   selectedVariationId: 0,
   brushSize: 1,
   mapId: 0,
   openPopupId: null,
   showGrid: true,
-  setSelectedMaterialId: (id) => set({ selectedMaterialId: id }),
-  setSelectedVariationId: (id) => set({ selectedVariationId: id }),
+  setSelectedMaterialId: (id) => set((state) => ({
+      selectedMaterialId: id,
+      selectedVariationId: state.materialVariations[id] || 0 
+  })),
+  setMaterialVariation: (matId, varId) => set((state) => {
+    const newVariations = { ...state.materialVariations, [matId]: varId };
+    
+    // Si estamos editando el material que está seleccionado actualmente,
+    // actualizamos también la variable global 'selectedVariationId' para que el Cursor responda.
+    const shouldUpdateGlobal = state.selectedMaterialId === matId;
+
+    return {
+       materialVariations: newVariations,
+       selectedVariationId: shouldUpdateGlobal ? varId : state.selectedVariationId
+    };
+  }),
   setBrushSize: (size) => set({ brushSize: size }),
   setOpenPopupId: (id) => set({ openPopupId: id }),
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })), 

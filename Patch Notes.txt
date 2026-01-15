@@ -1,0 +1,17 @@
+-------[BEAST BRAWL RENEWED PATCH NOTES]-------
+
+=== DEV VERSION 1.0 ===
+-Se definió la estructura para los materiales y variantes, siendo una imagen png
+de 2048x2048 pixeles donde cada textura tiene 128x128 además de dichas texturas están pensadas
+tomando en cuenta el offset EPSILON en Chunk.tsx que implica 3px de borde "muertos" para 
+evitar el Texture Bleding (lineas blancas en vóxeles si se miran desde lejos) a una distancia
+que abarque todo el mapa.
+-materials.ts posee más propiedades como atlasPos(textura a usar de megaAtlas), hardeness (dureza 
+del material), Type (Modelo GLB que usa) y Prop (define si es Bloque o Adorno).
+-La UI fue actualizada para representar los materiales de mejor manera (cursorHover.tsx y 
+MaterialIcon.tsx) aunque aún falta pulir detalles.
+-Se agregó ShaderUtils.ts dónde se maneja el comportamiento de bloques como pasto (Tintes) y
+Adornos como hierba (efecto de viento).
+
+Próximos Pasos: Ampliar la variedad de Materiales y Adornos e intentar implementar la 
+estética Cell Shading y Outlines.
