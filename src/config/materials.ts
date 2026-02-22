@@ -16,7 +16,7 @@ export interface MaterialDef {
   id: number;
   name: string;
   type: 'BASE' | 'GRASS' | 'PROP';
-  propShape?: 'CROSS' | 'MODEL';
+  propShape?: 'PLANE' | 'MODEL';
   color: string; // Color base (fallback)
   hardness: number;
   atlasPos?: { x: number, y: number };
@@ -104,7 +104,7 @@ export const MATERIALS_DB: Record<number, MaterialDef> = {
       id: 7,
       name: 'Hierba Alta',
       type: 'PROP',
-      propShape: 'CROSS',
+      propShape: 'PLANE',
       color: '#00ff6a',   
       hardness: 0,        
       atlasPos: { x: 0, y:  8}, 
@@ -115,6 +115,23 @@ export const MATERIALS_DB: Record<number, MaterialDef> = {
       3: { id: 3, name: 'Pantanosa', color: '#3e7a7a' } // Verde oscuro
       }
   },
+  8:{
+      id: 8,
+      name: 'Flor',
+      type: 'PROP',
+      propShape: 'PLANE',
+      color: '#ffffff',   
+      hardness: 0,        
+      atlasPos: { x: 1, y:  8}, 
+      variations: {
+      0: { id: 0, name: 'Azul', color: '#3768c2' },
+      1: { id: 1, name: 'Rojo', color: '#ad4032' }, // Naranja
+      2: { id: 2, name: 'Violeta', color: '#b14cc5' }, // Blanco hielo
+      3: { id: 3, name: 'Otoñal', color: '#f37d2a' }, // Naranja
+      4: { id: 4, name: 'Nevada', color: '#F0F8FF' }, // Blanco hielo
+      5: { id: 5, name: 'Pantanosa', color: '#3e7a7a' } // Verde oscuro
+      }
+  }
 };
 
 // Helper actualizado para obtener color específico

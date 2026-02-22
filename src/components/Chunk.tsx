@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { mergeBufferGeometries } from 'three-stdlib';
 import { MATERIALS_DB, ATLAS_CONFIG } from '../config/materials';
 import { useGLTF, useTexture } from '@react-three/drei';
-import { patchSolidGrassMaterial, patchPropMaterial } from '../utils/shaderUtils';
+import { patchSolidGrassMaterial, patchPropMaterial } from '../shaders';
 import { useFrame } from '@react-three/fiber';
 
 useGLTF.preload('/models/cubes/grass/GrassCubes_set.glb');
@@ -196,10 +196,10 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
 
 
   // 1. Definir Color (Tinte)
-  let color = '#ffffff';
+  let targetColorHex = '#ffffff';
   if (materialDef) {
     const variation = materialDef.variations?.[varId];
-    color = variation ? variation.color : materialDef.color;
+    targetColorHex = variation ? variation.color : materialDef.color;
   }
 
   // 2. Determinar si usamos lógica GRASS (Modelos) o BASE (Geometría Código)
@@ -214,7 +214,7 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
     // 2. BUSCAR TEXTURA (Lógica de Prioridad)
     const variation = materialDef.variations?.[varId];
     const effectiveAtlasPos = variation?.atlasPos || materialDef.atlasPos;
-    const effectiveColor = variation ? variation.color : materialDef.color;
+    const effectiveColor = isProp ? '#FFFFFF' : targetColorHex;
 
     // 3. GENERAR MATERIAL
     if (effectiveAtlasPos && baseTexture) {
@@ -246,7 +246,7 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
           patchPropMaterial(shader);
           shader.uniforms.uTime = mat.userData.uTime;
         };
-        mat.customProgramCacheKey = () => 'prop_wind';
+        mat.customProgramCacheKey = () => 'prop_smart_shader';
       }
 
       return mat;
@@ -255,7 +255,7 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
     // Fallback para materiales sin textura
     return new THREE.MeshStandardMaterial({ color: effectiveColor || 'white' });
 
-  }, [isGrass, isProp, grassMaterial, materialDef, baseTexture, varId]);
+  }, [isGrass, isProp, grassMaterial, materialDef, baseTexture, varId, targetColorHex]);
 
   // Hook de animación para el viento (actualiza el material generado arriba)
   useFrame((state) => {
@@ -273,8 +273,8 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
       if (mesh.geometry) mesh.computeBoundingSphere();
 
       // Si usamos el material de pasto, necesitamos colorear cada instancia
-      if (isGrass) {
-        const c = new THREE.Color(color);
+      if (isGrass || isProp) {
+        const c = new THREE.Color(targetColorHex);
         for (let i = 0; i < matrices.length; i++) mesh.setColorAt(i, c);
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       }
@@ -472,7 +472,7 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
     });
     // Inyectamos el shader
     mat.onBeforeCompile = patchSolidGrassMaterial; // Usamos el parche SIN viento
-    mat.customProgramCacheKey = () => 'solid_grass_tint';
+    mat.customProgramCacheKey = () => 'solid_grass_v2';
     return mat;
   }, [textureAtlas]);
 

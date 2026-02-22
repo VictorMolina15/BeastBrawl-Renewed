@@ -1,6 +1,6 @@
 import { useTerrainStore } from '../stores/useTerrainStore';
 import { MATERIALS_DB } from '../config/materials';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { MaterialIcon } from './MaterialIcon';
 import '../styles/LevelEditorUI.css';
@@ -8,25 +8,31 @@ import '../styles/LevelEditorUI.css';
 interface UIProps {
   isOrthographic: boolean;
   toggleCamera: () => void;
+  cameraInfoRef: React.RefObject<HTMLDivElement>;
 }
 
-export function UI({ isOrthographic, toggleCamera }: UIProps) {
+export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
+  const undo = useTerrainStore((state) => state.undo);
+  const redo = useTerrainStore((state) => state.redo);
+  const saveLevel = useTerrainStore((state) => state.saveLevel);
+  const loadLevel = useTerrainStore((state) => state.loadLevel);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const brushSize = useTerrainStore((state) => state.brushSize);
   const setBrushSize = useTerrainStore((state) => state.setBrushSize);
   const generateNewMap = useTerrainStore((state) => state.generateNewMap);
-  
+
   const selectedMaterialId = useTerrainStore((state) => state.selectedMaterialId);
   const selectedVariationId = useTerrainStore((state) => state.selectedVariationId);
-  
+
   const openPopupId = useTerrainStore((state) => state.openPopupId);
   const setOpenPopupId = useTerrainStore((state) => state.setOpenPopupId);
-  
+
   const setSelectedMaterialId = useTerrainStore((state) => state.setSelectedMaterialId);
   const materialVariations = useTerrainStore((state) => state.materialVariations);
   const setMaterialVariation = useTerrainStore((state) => state.setMaterialVariation);
 
-  const toggleGrid = useTerrainStore((state) => state.toggleGrid); 
-  const showGrid = useTerrainStore((state) => state.showGrid);     
+  const toggleGrid = useTerrainStore((state) => state.toggleGrid);
+  const showGrid = useTerrainStore((state) => state.showGrid);
 
   // Estado para guardar la posición exacta donde debe aparecer el popup
   const [popupPos, setPopupPos] = useState<{ top: number, left: number } | null>(null);
@@ -41,25 +47,25 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
   // Handler inteligente
   const handleTogglePopup = (matId: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (openPopupId === matId) {
-        setOpenPopupId(null);
-        setPopupPos(null);
+      setOpenPopupId(null);
+      setPopupPos(null);
     } else {
-        // Obtenemos las coordenadas del botón en la pantalla
-        const rect = e.currentTarget.getBoundingClientRect();
-        setOpenPopupId(matId);
-        // Guardamos la posición: Centrado horizontalmente al botón, y arriba de él
-        setPopupPos({
-            top: rect.top, // La parte superior del botón
-            left: rect.left + (rect.width / 2) // El centro del botón
-        });
+      // Obtenemos las coordenadas del botón en la pantalla
+      const rect = e.currentTarget.getBoundingClientRect();
+      setOpenPopupId(matId);
+      // Guardamos la posición: Centrado horizontalmente al botón, y arriba de él
+      setPopupPos({
+        top: rect.top, // La parte superior del botón
+        left: rect.left + (rect.width / 2) // El centro del botón
+      });
     }
   };
 
   const handleSelectMaterial = (matId: number) => {
-      setSelectedMaterialId(matId);
-      setOpenPopupId(null);
+    setSelectedMaterialId(matId);
+    setOpenPopupId(null);
   };
 
   // Encontrar el material activo para el portal
@@ -67,15 +73,40 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
 
   return (
     <>
+      <div
+        ref={cameraInfoRef}
+        style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          background: 'rgba(0,0,0,0.6)',
+          color: 'rgb(180, 180, 180)',
+          fontFamily: 'monospace',
+          padding: '8px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          pointerEvents: 'none', // Para que los clicks lo traspasen
+          whiteSpace: 'pre-line', // Permite saltos de línea
+          zIndex: 1000
+        }}
+      >
+        Cargando cámara...
+      </div>
       <div className="editor-hud">
-        
-        {/* 1. FILA PRINCIPAL */}
+
+        {/* FILA SUPERIOR */}
+        <div className="hud-top-row">
+          <button className="top-btn" onClick={() => undo()}>Undo</button>
+          <button className="top-btn" onClick={() => redo()}>Redo</button>    
+        </div>
+
+        {/*FILA PRINCIPAL */}
         <div className="hud-main-row">
-          
+
           <div className="brush-section">
             <label className="brush-label">Tamaño del pincel: {brushSize}</label>
-            
-            {/* 2. APLICAMOS EL ESTILO DINÁMICO */}
+
+            {/* APLICAMOS EL ESTILO DINÁMICO */}
             <input
               type="range"
               className="brush-slider"
@@ -101,23 +132,23 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
               const hasVariations = mat.variations && Object.keys(mat.variations).length > 1;
 
               return (
-                <div 
+                <div
                   key={mat.id}
                   className={`mat-btn ${isSelected ? 'active' : ''} ${isPopupOpen ? 'popup-open' : ''}`}
                   onClick={() => handleSelectMaterial(mat.id)}
                 >
                   <div className="mat-preview-container">
-                      <MaterialIcon 
-                          material={mat} 
-                          variationId={savedVariation}
-                          size={32} 
-                      />
+                    <MaterialIcon
+                      material={mat}
+                      variationId={savedVariation}
+                      size={32}
+                    />
                   </div>
-                  
+
                   <span className="mat-name">{mat.name}</span>
 
                   {hasVariations && (
-                    <div 
+                    <div
                       className="popover-trigger"
                       onClick={(e) => handleTogglePopup(mat.id, e)}
                       title="Variaciones"
@@ -131,20 +162,20 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
           </div>
         </div>
 
-        {/* 2. FILA INFERIOR */}
+        {/* FILA INFERIOR */}
         <div className="hud-actions-row">
-          <button 
-            className="action-btn btn-purple" 
+          <button
+            className="action-btn btn-purple"
             onClick={(e) => {
               toggleCamera();
               e.currentTarget.blur();
             }}
           >
-             {isOrthographic ? '3D' : '2D'}
+            {isOrthographic ? '3D' : '2D'}
           </button>
-          
-          <button 
-            className="action-btn" 
+
+          <button
+            className="action-btn"
             style={{ background: showGrid ? '#444' : '#222', border: '1px solid #555' }}
             onClick={(e) => {
               toggleGrid();
@@ -154,8 +185,8 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
             {showGrid ? 'Ocultar Grid' : 'Mostrar Grid'}
           </button>
 
-          <button 
-            className="action-btn btn-orange" 
+          <button
+            className="action-btn btn-orange"
             onClick={(e) => {
               generateNewMap();
               e.currentTarget.blur();
@@ -163,51 +194,73 @@ export function UI({ isOrthographic, toggleCamera }: UIProps) {
           >
             Generar
           </button>
-          <button className="action-btn btn-green" onClick={(e) => e.currentTarget.blur()}>Cargar</button>
-          <button className="action-btn btn-blue" onClick={(e) => e.currentTarget.blur()}>Guardar</button>
+          <input 
+          type="file" 
+          ref={fileInputRef} 
+          style={{ display: 'none' }} 
+          accept=".json"
+          onChange={(e) => {
+            if (e.target.files?.[0]) loadLevel(e.target.files[0]);
+            e.target.value = ""; // Reset para permitir cargar el mismo archivo
+          }}
+        />
+
+        <button 
+          className="action-btn btn-green" 
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Cargar
+        </button>
+        
+        <button 
+          className="action-btn btn-blue" 
+          onClick={saveLevel}
+        >
+          Guardar
+        </button>
         </div>
       </div>
 
       {/* --- PORTAL DEL POPUP (Fuera del flujo HTML normal) --- */}
       {/* Esto renderiza el div directamente en el <body> */}
       {activeMaterial && popupPos && createPortal(
-        <div 
-            className="variation-popup" 
-            style={{ 
-                top: popupPos.top, 
-                left: popupPos.left 
-            }}
-            onClick={(e) => e.stopPropagation()}
+        <div
+          className="variation-popup"
+          style={{
+            top: popupPos.top,
+            left: popupPos.left
+          }}
+          onClick={(e) => e.stopPropagation()}
         >
-            {Object.values(activeMaterial.variations).map((variation) => {
-          // Checamos si esta variación es la activa
-          const isActiveVar = selectedMaterialId === activeMaterial.id && selectedVariationId === variation.id;
-          
-          return (
-            <div
+          {Object.values(activeMaterial.variations).map((variation) => {
+            // Checamos si esta variación es la activa
+            const isActiveVar = selectedMaterialId === activeMaterial.id && selectedVariationId === variation.id;
+
+            return (
+              <div
                 key={variation.id}
                 // Mantenemos la clase 'var-btn' para el layout y 'active-var' para el borde blanco
                 className={`var-btn ${isActiveVar ? 'active-var' : ''}`}
-                
+
                 // Tooltip nativo
                 title={variation.name}
-                
+
                 // Evento de click para seleccionar
                 onClick={() => {
                   setMaterialVariation(activeMaterial.id, variation.id);
                   setSelectedMaterialId(activeMaterial.id);
                   setOpenPopupId(null); // Cierra el popup al elegir
                 }}
-            >
+              >
                 {/* ÚNICO CONTENIDO: El Icono con Textura + Tinte */}
                 <MaterialIcon
                   material={activeMaterial}
                   variationId={variation.id}
-                  size={40} 
+                  size={40}
                 />
-            </div>
-          );
-      })}
+              </div>
+            );
+          })}
         </div>,
         document.body
       )}

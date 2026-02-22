@@ -40,17 +40,26 @@ export function Cursor({ position, visible }: CursorProps) {
   // Datos del material seleccionado
   const materialDef = MATERIALS_DB[selectedMaterialId];
   const isGrass = materialDef?.type === 'GRASS';
+  const isProp = materialDef?.type === 'PROP';
 
   const boxGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
 
-  const cursorGeometry = useMemo(() => {
-      if (isGrass) {
-          return grassNodes.CubeGrass?.geometry || boxGeometry;
-      } else {
-          // Para Tierra, Piedra, etc. usamos tu cubo base con UVs correctas
-          return baseNodes.CubeBase?.geometry || boxGeometry;
+  const propGeometry = useMemo(() => {
+      const geo = new THREE.PlaneGeometry(1, 1);
+      const uvAttr = geo.attributes.uv;
+      if (uvAttr) {
+          for (let i = 0; i < uvAttr.count; i++) {
+              uvAttr.setY(i, 1 - uvAttr.getY(i));
+          }
       }
-  }, [isGrass, grassNodes, baseNodes, boxGeometry]);
+      return geo;
+  }, []);
+
+ const cursorGeometry = useMemo(() => {
+      if (isGrass) return grassNodes.CubeGrass?.geometry || boxGeometry;
+      if (isProp) return propGeometry;
+      return baseNodes.CubeBase?.geometry || boxGeometry;
+  }, [isGrass, isProp, grassNodes, baseNodes, boxGeometry, propGeometry]);
 
   // --- CONFIGURACIÓN DEL MATERIAL HÍBRIDO ---
   const cursorMaterial = useMemo(() => {
@@ -134,14 +143,61 @@ export function Cursor({ position, visible }: CursorProps) {
             );
         };
         mat.customProgramCacheKey = () => `cursor_grass_${selectedVariationId}`; // Forzar recompilación si cambia color
-    } else {
-        // Si quieres que el Hielo se vea azulado:
-        //mat.color = targetColor; 
+    } else if (isProp){
+        mat.userData.uTint = { value: targetColor };
+        
+        mat.onBeforeCompile = (shader) => {
+            shader.uniforms.uTint = mat.userData.uTint;
+            
+            // Inyección segura
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <common>',
+                `#include <common> 
+                 varying float vMaskVal;`
+            );
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <color_vertex>',
+                `#include <color_vertex> 
+                 #ifdef USE_COLOR
+                    vMaskVal = color.r; 
+                 #else
+                    vMaskVal = 1.0;
+                 #endif
+                 `
+            );
+
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <common>',
+                `#include <common> 
+                 uniform vec3 uTint; 
+                 varying float vMaskVal;
+                 float getSaturation(vec3 c) { return max(max(c.r,c.g),c.b) - min(min(c.r,c.g),c.b); }
+                 `
+            );
+
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <color_fragment>',
+                `
+                vec4 diffuseColorOriginal = diffuseColor;
+                vec3 finalTint = uTint;
+                float mixFactor = vMaskVal;
+
+                float saturation = getSaturation(diffuseColorOriginal.rgb);
+                mixFactor *= (1.0 - smoothstep(0.0, 0.15, saturation));
+
+                vec3 tinted = diffuseColorOriginal.rgb * finalTint;
+                diffuseColor.rgb = mix(diffuseColorOriginal.rgb, tinted, mixFactor);
+                diffuseColor.a = diffuseColorOriginal.a;
+                `
+            );
+        };
+        // Clave única para recompiilar si cambia Grass <-> Prop
+        mat.customProgramCacheKey = () => `cursor_${isProp?'prop':'grass'}_${selectedVariationId}`;
     }
 
     return mat;
 
-  }, [selectedVariationId, textureAtlas, isGrass, materialDef]);
+  }, [selectedVariationId, textureAtlas, isGrass, isProp,materialDef]);
 
   // --- ANIMACIÓN ZOOM  ---
 useFrame((state) => {
@@ -174,7 +230,7 @@ useFrame((state) => {
         />
         
         {/* Marco visual opcional */}
-        <lineSegments position={[0, position[1], 0.5]}>
+        <lineSegments position={[0, position[1], 0.1]}>
              <edgesGeometry args={[new THREE.BoxGeometry(1, 1, 1)]} />
              <lineBasicMaterial color="white" opacity={0.8} transparent />
         </lineSegments>

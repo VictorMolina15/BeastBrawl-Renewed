@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Plane, Grid } from '@react-three/drei';
 import { useTerrainStore } from '../stores/useTerrainStore';
 import * as THREE from 'three';
-import { Cursor } from './cursorHover'
+import { Cursor } from './CursorHover'
 
 
 // El tamaño del mundo en vóxeles

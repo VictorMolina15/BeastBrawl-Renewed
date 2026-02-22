@@ -6,6 +6,12 @@ const WORLD_WIDTH_IN_CHUNKS = 8;
 const WORLD_HEIGHT_IN_CHUNKS = 4;
 const TERRAIN_THICKNESS = 1;
 
+// --- HELPERS PARA JSON ---
+const uint8ToBase64 = (arr: Uint8Array) => btoa(String.fromCharCode(...arr));
+const base64ToUint8 = (str: string) => new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+
+const MAX_HISTORY = 20;
+
 interface TerrainState {
   chunkSize: number;
   chunks: Map<string, Uint8Array>;
@@ -17,6 +23,8 @@ interface TerrainState {
   mapId: number;
   openPopupId: number | null;
   showGrid: boolean;
+  history: Array<Map<string, Uint8Array>>;
+  future: Array<Map<string, Uint8Array>>;
   generateNewMap: () => void;
   setBrushSize: (size: number) => void;
   setSelectedMaterialId: (id: number) => void;
@@ -27,6 +35,11 @@ interface TerrainState {
   getVariation: (x: number, y: number, z: number) => number;
   setOpenPopupId: (id: number | null) => void;
   toggleGrid: () => void;
+  saveLevel: () => void;
+  loadLevel: (file: File) => Promise<void>;
+  undo: () => void;
+  redo: () => void;
+  pushHistory: () => void;
 }
 
 function createInitialChunks(): { chunks: Map<string, Uint8Array>; variations: Map<string, Uint8Array> } {
@@ -131,6 +144,8 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   mapId: 0,
   openPopupId: null,
   showGrid: true,
+  history: [],
+  future: [],
   setSelectedMaterialId: (id) => set((state) => ({
       selectedMaterialId: id,
       selectedVariationId: state.materialVariations[id] || 0 
@@ -158,13 +173,99 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
           mapId: state.mapId + 1 
       }));
   },
+  pushHistory: () => {
+    const { chunks } = get();
+    set((state) => ({
+      history: [new Map(chunks), ...state.history].slice(0, MAX_HISTORY),
+      future: [] // Limpiamos el futuro al hacer una acción nueva
+    }));
+  },
+  undo: () => {
+    const { history, chunks, future } = get();
+    if (history.length === 0) return;
+
+    const previous = history[0];
+    const newHistory = history.slice(1);
+
+    set({
+      chunks: previous,
+      history: newHistory,
+      future: [new Map(chunks), ...future].slice(0, MAX_HISTORY),
+      mapId: get().mapId + 1 // Forzamos re-render de colisiones
+    });
+  },
+
+  redo: () => {
+    const { future, chunks, history } = get();
+    if (future.length === 0) return;
+
+    const next = future[0];
+    const newFuture = future.slice(1);
+
+    set({
+      chunks: next,
+      future: newFuture,
+      history: [new Map(chunks), ...history].slice(0, MAX_HISTORY),
+      mapId: get().mapId + 1
+    });
+  },
+
+  saveLevel: () => {
+    const { chunks, variations } = get();
+    const levelData = {
+      version: "1.0",
+      background: "default", // Futuro: sacar de UI
+      music: "default",      // Futuro: sacar de UI
+      chunks: Array.from(chunks.entries()).map(([key, data]) => ({
+        key,
+        data: uint8ToBase64(data),
+        vars: uint8ToBase64(variations.get(key) || new Uint8Array(data.length))
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(levelData)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `beastbrawl_level_${Date.now()}.json`;
+    link.click();
+  },
+
+  loadLevel: async (file: File) => {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    
+    const newChunks = new Map<string, Uint8Array>();
+    const newVars = new Map<string, Uint8Array>();
+
+    interface ChunkData {
+      key: string;
+      data: string;
+      vars: string;
+    }
+
+    (parsed.chunks as ChunkData[]).forEach((c) => {
+      newChunks.set(c.key, base64ToUint8(c.data));
+      newVars.set(c.key, base64ToUint8(c.vars));
+    });
+
+    set((state) => ({
+      chunks: newChunks,
+      variations: newVars,
+      mapId: state.mapId + 1,
+      history: [],
+      future: []
+    }));
+  },
   destroyTerrain: (centerX, centerY, radius) => {
+    get().pushHistory();
     set((state) => ({
       chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, 0),
       variations: modifyTerrain(state.variations, state.chunkSize, centerX, centerY, radius, 0)
     }));
   },
   createTerrain: (centerX, centerY, radius, materialId) => {
+    get().pushHistory();
     set((state) => ({
       chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, materialId),
       variations: modifyTerrain(state.variations, state.chunkSize, centerX, centerY, radius, state.selectedVariationId)

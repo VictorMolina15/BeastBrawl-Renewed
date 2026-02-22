@@ -1,53 +1,133 @@
-import { Canvas } from '@react-three/fiber';
-import { Stats, OrbitControls } from '@react-three/drei';
+import { Canvas,useThree, useFrame } from '@react-three/fiber';
+import { Stats, OrbitControls, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'; // <--- IMPORTAR CÁMARAS
+import * as THREE from 'three';
+import type { OrbitControls as OrbitControlsType } from 'three-stdlib';
 import { useTerrainStore } from './stores/useTerrainStore';
 import { Player } from './components/Player';
 import { Physics } from '@react-three/rapier';
 import { UI } from './components/LevelUI';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PlacementGrid } from './components/PlacementGrid';
-import { Terrain } from './components/Terrain'; // <--- IMPORTAMOS TERRAIN
+import { Terrain } from './components/Terrain';
+import { InputManager } from './components/InputManager';
+import { useInputStore } from './stores/useInputStore';
+import { MOUSE } from 'three';
+
+const INITIAL_CENTER = [58, 30, 0] as const;
+const INITIAL_ZOOM = 13;
+const INITIAL_Z_OFFSET = 120; // Qué tan atrás está la cámara
+
+const CameraLogger = ({ domRef }: { domRef: React.RefObject<HTMLDivElement> }) => {
+  const { camera } = useThree();
+  
+  useFrame(() => {
+    if (domRef.current) {
+      // Formateamos bonito los números
+      const x = camera.position.x.toFixed(1);
+      const y = camera.position.y.toFixed(1);
+      const z = camera.position.z.toFixed(1);
+      const zoom = camera.type === 'OrthographicCamera' 
+        ? `Zoom: ${camera.zoom.toFixed(2)}` 
+        : `FOV: ${camera instanceof THREE.PerspectiveCamera ? camera.fov : 'N/A'}`;
+
+      domRef.current.innerText = `POS: [${x}, ${y}, ${z}]\n${zoom}`;
+    }
+  });
+  return null;
+};
+
+const CameraController = ({ isOrthographic, isShiftPressed }: { isOrthographic: boolean, isShiftPressed: boolean }) => {
+    const controlsRef = useRef<OrbitControlsType>(null);
+    const { camera } = useThree();
+
+    useEffect(() => {
+        if (controlsRef.current) {
+            controlsRef.current.target.set(INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]);
+            controlsRef.current.update();
+            camera.lookAt(INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]);
+        }
+    }, [isOrthographic, camera]);
+
+    return (
+        <OrbitControls 
+            ref={controlsRef}
+            key={isOrthographic ? 'ortho' : 'persp'}
+            
+            // 2. SIEMPRE HABILITADO (Para que el click medio funcione sin teclas)
+            enabled={true} 
+            
+            // 3. CONFIGURACIÓN DE PANE (Arrastre)
+            enablePan={true} // Permitir arrastrar siempre
+            panSpeed={isOrthographic ? 1 : 2} // Ajustar velocidad si se siente lento
+
+            // 4. CONFIGURACIÓN DE ROTACIÓN
+            // Solo permitimos rotar si SHIFT está presionado (Tu requisito)
+            enableRotate={!isOrthographic && isShiftPressed} 
+            
+            // 5. MAPEO DE BOTONES DEL MOUSE
+            mouseButtons={{
+                LEFT: undefined,     // Dejamos el izquierdo libre para el juego (Poner Bloques)
+                MIDDLE: MOUSE.PAN,   // Click Medio = Arrastrar (Pan)
+                RIGHT: MOUSE.ROTATE  // Click Derecho = Rotar (Solo funciona si enableRotate es true)
+            }}
+
+            zoomSpeed={isOrthographic ? 1 : 0.5}
+            target={[INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]]}
+        />
+    );
+}
 
 export default function App() {
   const mapId = useTerrainStore((state) => state.mapId);
   const [isOrthographic, setIsOrthographic] = useState(true); 
   const toggleCamera = () => setIsOrthographic(prev => !prev);
+  const cameraInfoRef = useRef<HTMLDivElement>(null!);
 
-  const [isShiftPressed, setIsShiftPressed] = useState(false);
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') setIsShiftPressed(true); };
-    const handleKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') setIsShiftPressed(false); };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
+  // 1. USAMOS EL NUEVO SISTEMA DE INPUT
+  // Nos suscribimos solo a la acción 'ROTATE_CAMERA'
+  const isRotatePressed = useInputStore((state) => state.activeActions['ROTATE_CAMERA']);
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
-      <UI isOrthographic={isOrthographic} toggleCamera={toggleCamera} />
+      <InputManager />
+      <UI 
+        isOrthographic={isOrthographic} 
+        toggleCamera={toggleCamera} 
+        cameraInfoRef={cameraInfoRef} 
+      />
 
-      <Canvas orthographic={isOrthographic} camera={{
-        ...(isOrthographic
-          ? { position: [0, 0, 120], zoom: 10 } 
-          : { position: [0, 0, 120], fov: 60 }), 
-        rotation: [0, 0, 0]
-      }} >
+      <Canvas>
+        <CameraLogger domRef={cameraInfoRef} />
+
+        {isOrthographic ? (
+            <OrthographicCamera 
+                makeDefault 
+                position={[INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_Z_OFFSET]} 
+                zoom={INITIAL_ZOOM}
+                near={-100} far={1000}
+            />
+        ) : (
+            <PerspectiveCamera 
+                makeDefault 
+                position={[INITIAL_CENTER[0], INITIAL_CENTER[1], 80]} 
+                fov={50}
+                near={0.1} far={1000}
+            />
+        )}
+
         <Physics debug gravity={[0, -20, 0]}>
-          <ambientLight intensity={1} />
+          <ambientLight intensity={1.5} />
           <directionalLight position={[100, 100, 100]} intensity={1.5} />
-
           <Terrain />
-          
           <PlacementGrid />
           <Player key={mapId} />
-          <OrbitControls 
-            key={isOrthographic ? 'ortho' : 'persp'}
-            enabled={isShiftPressed} 
-            enableRotate={!isOrthographic} 
+          
+          {/* CONTROLADOR DE CÁMARA EXTRAÍDO */}
+          <CameraController 
+            isOrthographic={isOrthographic} 
+            isShiftPressed={isRotatePressed} // Ahora usa el store, no el evento nativo
           />
+          
           <Stats /> 
         </Physics>
       </Canvas>

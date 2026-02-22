@@ -1,6 +1,6 @@
 -------[BEAST BRAWL RENEWED PATCH NOTES]-------
 
-=== DEV VERSION 1.0 ===
+=== DEV VERSION 1.0 [14 de Enero 2026] ===
 -Se definió la estructura para los materiales y variantes, siendo una imagen png
 de 2048x2048 pixeles donde cada textura tiene 128x128 además de dichas texturas están pensadas
 tomando en cuenta el offset EPSILON en Chunk.tsx que implica 3px de borde "muertos" para 
@@ -15,3 +15,24 @@ Adornos como hierba (efecto de viento).
 
 Próximos Pasos: Ampliar la variedad de Materiales y Adornos e intentar implementar la 
 estética Cell Shading y Outlines.
+
+=== DEV VERSION 1.1 [22 de Febrero 2026] ===
+-LevelUI.tsx muestra correctamente los iconos del megaAtlas junto con sus variaciones gracias a 
+lógica añadida MaterialIcon.tsx, de igual modo la "preview" del bloque también es correcta gracias
+a las funcionalidades agregadas en CursorHover.tsx.
+-Se separó la lógica de Shaders para tener mejor organización de los mismos en una carpeta
+-Se separó la lógica de Inputs para que en un futuro sea más sencillo personalizar los controles
+-Ahora el juego es capaz de guardar hasta 20 cambios en el historial, se puede hacer la acción rehacer y 
+deshacer desde la UI o con Ctl+Z (undo) y Ctl+Mayus+Z || Ctl+Y (redo).
+El párametro de cambios se puede establecer en useTerrainStore.ts en "MAX_HISTORY".
+-Guardar y Cargar Niveles ya es posible, se generan en formato JSON con la siguiente estructura:
+{
+  "metadata": { "name": "Mi Nivel", "music": "forest_theme", "background": "parallax_hills" },
+  "chunks": [
+    { "key": "0,0,0", "data": [base64_string], "vars": [base64_string] }
+  ]
+}
+La lógica se encuentra en useTerrainStore.ts.
+
+Próximos Pasos: añadir el sistema de fondos para los niveles e implementarla estética Cell Shading + Outlines 
+que esta pendiente.

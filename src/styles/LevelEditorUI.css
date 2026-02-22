@@ -229,7 +229,7 @@
   gap: 10px;
 }
 
-.action-btn {
+.action-btn, .top-btn {
   flex: 1;
   padding: 10px;
   border-radius: 20px; /* Estilo pastilla */
@@ -243,10 +243,15 @@
   text-transform: uppercase;
 }
 
-.action-btn:hover {
+.top-btn {
+  border-radius: 0.8rem;
+  margin-right: 0.5rem;
+}
+
+.action-btn:hover, .top-btn:hover {
   filter: brightness(1.2);
 }
-.action-btn:active {
+.action-btn:active, .top-btn:active {
   transform: scale(0.95);
 }
 

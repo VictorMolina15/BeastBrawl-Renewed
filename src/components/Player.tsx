@@ -1,9 +1,7 @@
-import { useKeyboardControls } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { CapsuleCollider, CoefficientCombineRule, RapierCollider, RapierRigidBody, RigidBody, useRapier } from '@react-three/rapier';
 import { useEffect, useRef, useState } from 'react';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type ControlActions, Controls } from '../main';
+import { useInputStore } from '../stores/useInputStore'; // <--- IMPORTAMOS TU STORE
 
 const MOVE_SPEED = 5;
 const JUMP_FORCE = 12;
@@ -14,22 +12,21 @@ export function Player() {
   const [isGrounded, setIsGrounded] = useState(false);
   const canJumpRef = useRef(true);
 
-  const { rapier, world } = useRapier();
-  // CORRECCIÓN SUTIL: `subscribe` no se estaba usando, así que lo quito para evitar errores de linting.
-  // Si lo necesitaras para otra cosa (como un efecto de partículas al saltar), lo volverías a añadir.
-  const getControls = useKeyboardControls<ControlActions>()[1];
+ const { world, rapier } = useRapier();
+
+  // NOTA: Ya no necesitamos useKeyboardControls. 
+  // Leeremos el estado directamente en el loop de física.
 
   useFrame(() => {
     if (!rigidBodyRef.current || !playerColliderRef.current) return;
 
-    // La lógica de Ground-Check es correcta.
+    // 1. GROUND CHECK (Mantenemos tu lógica, funciona bien)
     const origin = rigidBodyRef.current.translation();
     origin.y -= 0.75;
     const direction = { x: 0, y: -1, z: 0 };
     const ray = new rapier.Ray(origin, direction);
     const hit = world.castRayAndGetNormal(ray, 0.5, true, undefined, undefined, playerColliderRef.current);
     
-    // Tu versión de esta comprobación era más segura, la adopto.
     if (hit && hit.normal && hit.normal.y > 0.7) {
       if (!isGrounded) setIsGrounded(true);
       canJumpRef.current = true;
@@ -37,12 +34,21 @@ export function Player() {
       if (isGrounded) setIsGrounded(false);
     }
     
-    // La lógica de movimiento y salto es correcta.
-    const { left, right, jump } = getControls();
+    // 2. INPUTS (NUEVO SISTEMA)
+    // Usamos .getState() para leer los inputs sin provocar re-renders en React
+    const actions = useInputStore.getState().activeActions;
+    
+    const left = actions['MOVE_LEFT'];
+    const right = actions['MOVE_RIGHT'];
+    const jump = actions['JUMP'];
+
+    // 3. FÍSICAS
     const linvel = rigidBodyRef.current.linvel();
+    
     if (right) linvel.x = MOVE_SPEED;
     else if (left) linvel.x = -MOVE_SPEED;
     else linvel.x = 0;
+    
     rigidBodyRef.current.setLinvel({ x: linvel.x, y: linvel.y, z: 0 }, true);
 
     if (jump && isGrounded && canJumpRef.current) {
@@ -69,7 +75,7 @@ export function Player() {
       mass={1}
       lockRotations
       position={[0, 75, 0]}
-      ccd={true} // continuous collision detection
+      ccd={true} 
       enabledTranslations={[true, true, false]}
     >
       <CapsuleCollider 
