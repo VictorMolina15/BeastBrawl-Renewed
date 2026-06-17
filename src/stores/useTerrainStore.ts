@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createNoise2D } from 'simplex-noise'; 
+import { createNoise2D } from 'simplex-noise';
 
 const CHUNK_SIZE = 16;
 const WORLD_WIDTH_IN_CHUNKS = 8;
@@ -25,6 +25,8 @@ interface TerrainState {
   showGrid: boolean;
   history: Array<Map<string, Uint8Array>>;
   future: Array<Map<string, Uint8Array>>;
+  currentBiome: string;
+  setBiome: (biome: string) => void;
   generateNewMap: () => void;
   setBrushSize: (size: number) => void;
   setSelectedMaterialId: (id: number) => void;
@@ -95,7 +97,7 @@ const modifyTerrain = (
       const dx = x - intCenterX;
       const dy = y - intCenterY;
       if (dx * dx + dy * dy >= radiusSq) continue;
-      
+
       // Modificamos a través del grosor del terreno
       for (let z = 0; z < TERRAIN_THICKNESS; z++) {
         const worldX = x;
@@ -119,14 +121,14 @@ const modifyTerrain = (
         const localY = worldY - chunkY * chunkSize;
         const localZ = worldZ;
         const index = localZ * chunkSize * chunkSize + localY * chunkSize + localX;
-        
+
         if (index >= 0 && index < chunkData.length) {
           chunkData[index] = modifyValue;
         }
       }
     }
   }
-  
+
   affectedChunks.forEach((value, key) => newChunks.set(key, value));
   return newChunks;
 };
@@ -146,32 +148,36 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   showGrid: true,
   history: [],
   future: [],
+  currentBiome: 'RIOT_GARDEN',
+  setBiome: (biome: string) => {
+    set({ currentBiome: biome });
+  },
   setSelectedMaterialId: (id) => set((state) => ({
-      selectedMaterialId: id,
-      selectedVariationId: state.materialVariations[id] || 0 
+    selectedMaterialId: id,
+    selectedVariationId: state.materialVariations[id] || 0
   })),
   setMaterialVariation: (matId, varId) => set((state) => {
     const newVariations = { ...state.materialVariations, [matId]: varId };
-    
+
     // Si estamos editando el material que está seleccionado actualmente,
     // actualizamos también la variable global 'selectedVariationId' para que el Cursor responda.
     const shouldUpdateGlobal = state.selectedMaterialId === matId;
 
     return {
-       materialVariations: newVariations,
-       selectedVariationId: shouldUpdateGlobal ? varId : state.selectedVariationId
+      materialVariations: newVariations,
+      selectedVariationId: shouldUpdateGlobal ? varId : state.selectedVariationId
     };
   }),
   setBrushSize: (size) => set({ brushSize: size }),
   setOpenPopupId: (id) => set({ openPopupId: id }),
-  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })), 
+  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
   generateNewMap: () => {
-      const newData = createInitialChunks();
-      set((state) => ({ 
-          chunks: newData.chunks,
-          variations: newData.variations,
-          mapId: state.mapId + 1 
-      }));
+    const newData = createInitialChunks();
+    set((state) => ({
+      chunks: newData.chunks,
+      variations: newData.variations,
+      mapId: state.mapId + 1
+    }));
   },
   pushHistory: () => {
     const { chunks } = get();
@@ -211,11 +217,11 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   },
 
   saveLevel: () => {
-    const { chunks, variations } = get();
+    const { chunks, variations, currentBiome } = get();
     const levelData = {
       version: "1.0",
-      background: "default", // Futuro: sacar de UI
-      music: "default",      // Futuro: sacar de UI
+      background: currentBiome, 
+      music: "default",      
       chunks: Array.from(chunks.entries()).map(([key, data]) => ({
         key,
         data: uint8ToBase64(data),
@@ -234,7 +240,7 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   loadLevel: async (file: File) => {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    
+
     const newChunks = new Map<string, Uint8Array>();
     const newVars = new Map<string, Uint8Array>();
 
@@ -251,6 +257,7 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
 
     set((state) => ({
       chunks: newChunks,
+      currentBiome: parsed.background || state.currentBiome,
       variations: newVars,
       mapId: state.mapId + 1,
       history: [],

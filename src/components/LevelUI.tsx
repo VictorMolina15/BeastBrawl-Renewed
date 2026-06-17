@@ -3,6 +3,7 @@ import { MATERIALS_DB } from '../config/materials';
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { MaterialIcon } from './MaterialIcon';
+import { BIOMES_CONFIG } from '../config/backgrounds';
 import '../styles/LevelEditorUI.css';
 
 interface UIProps {
@@ -20,6 +21,8 @@ export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
   const brushSize = useTerrainStore((state) => state.brushSize);
   const setBrushSize = useTerrainStore((state) => state.setBrushSize);
   const generateNewMap = useTerrainStore((state) => state.generateNewMap);
+  const currentBiome = useTerrainStore((state) => state.currentBiome);
+  const setBiome = useTerrainStore((state) => state.setBiome);
 
   const selectedMaterialId = useTerrainStore((state) => state.selectedMaterialId);
   const selectedVariationId = useTerrainStore((state) => state.selectedVariationId);
@@ -97,31 +100,47 @@ export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
         {/* FILA SUPERIOR */}
         <div className="hud-top-row">
           <button className="top-btn" onClick={() => undo()}>Undo</button>
-          <button className="top-btn" onClick={() => redo()}>Redo</button>    
+          <button className="top-btn" onClick={() => redo()}>Redo</button>
         </div>
 
         {/*FILA PRINCIPAL */}
         <div className="hud-main-row">
 
-          <div className="brush-section">
-            <label className="brush-label">Tamaño del pincel: {brushSize}</label>
+          <div className="control-group">
+            <label>Fondo:</label>
+            <select
+              value={currentBiome}
+              onChange={(e) => setBiome(e.target.value)}
+              className="biome-select"
+            >
+              {Object.keys(BIOMES_CONFIG).map(biomeKey => (
+                <option key={biomeKey} value={biomeKey}>
+                  {biomeKey.replace('_', ' ')}
+                </option>
+              ))}
+            </select>
 
-            {/* APLICAMOS EL ESTILO DINÁMICO */}
-            <input
-              type="range"
-              className="brush-slider"
-              min={min}
-              max={max}
-              value={brushSize}
-              onChange={(e) => setBrushSize(parseInt(e.target.value))}
-              style={{
-                background: `linear-gradient(to right, 
+
+            <div className="brush-section">
+              <label className="brush-label">Tamaño del pincel: {brushSize}</label>
+
+              {/* APLICAMOS EL ESTILO DINÁMICO */}
+              <input
+                type="range"
+                className="brush-slider"
+                min={min}
+                max={max}
+                value={brushSize}
+                onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                style={{
+                  background: `linear-gradient(to right, 
                   #1e3a8a 0%, 
                   #3b82f6 ${percentage}%, 
                   #444 ${percentage}%, 
                   #444 100%)`
-              }}
-            />
+                }}
+              />
+            </div>
           </div>
 
           <div className="materials-strip">
@@ -194,30 +213,30 @@ export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
           >
             Generar
           </button>
-          <input 
-          type="file" 
-          ref={fileInputRef} 
-          style={{ display: 'none' }} 
-          accept=".json"
-          onChange={(e) => {
-            if (e.target.files?.[0]) loadLevel(e.target.files[0]);
-            e.target.value = ""; // Reset para permitir cargar el mismo archivo
-          }}
-        />
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".json"
+            onChange={(e) => {
+              if (e.target.files?.[0]) loadLevel(e.target.files[0]);
+              e.target.value = ""; // Reset para permitir cargar el mismo archivo
+            }}
+          />
 
-        <button 
-          className="action-btn btn-green" 
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Cargar
-        </button>
-        
-        <button 
-          className="action-btn btn-blue" 
-          onClick={saveLevel}
-        >
-          Guardar
-        </button>
+          <button
+            className="action-btn btn-green"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Cargar
+          </button>
+
+          <button
+            className="action-btn btn-blue"
+            onClick={saveLevel}
+          >
+            Guardar
+          </button>
         </div>
       </div>
 

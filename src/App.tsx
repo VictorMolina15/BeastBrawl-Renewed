@@ -11,9 +11,10 @@ import { PlacementGrid } from './components/PlacementGrid';
 import { Terrain } from './components/Terrain';
 import { InputManager } from './components/InputManager';
 import { useInputStore } from './stores/useInputStore';
+import { Background } from './components/Background';
 import { MOUSE } from 'three';
 
-const INITIAL_CENTER = [58, 30, 0] as const;
+const INITIAL_CENTER = [63, 30, 0] as const;
 const INITIAL_ZOOM = 13;
 const INITIAL_Z_OFFSET = 120; // Qué tan atrás está la cámara
 
@@ -114,7 +115,7 @@ export default function App() {
                 near={0.1} far={1000}
             />
         )}
-
+        <Background />
         <Physics debug gravity={[0, -20, 0]}>
           <ambientLight intensity={1.5} />
           <directionalLight position={[100, 100, 100]} intensity={1.5} />
@@ -127,7 +128,6 @@ export default function App() {
             isOrthographic={isOrthographic} 
             isShiftPressed={isRotatePressed} // Ahora usa el store, no el evento nativo
           />
-          
           <Stats /> 
         </Physics>
       </Canvas>

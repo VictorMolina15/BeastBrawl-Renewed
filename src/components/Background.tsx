@@ -1,48 +1,227 @@
-import { useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
-import { useTexture } from '@react-three/drei';
+// src/components/Background.tsx
+import { useRef, useMemo } from 'react';
+import { useFrame, useThree, createPortal } from '@react-three/fiber';
+import { useTexture, useGLTF, OrthographicCamera } from '@react-three/drei';
 import * as THREE from 'three';
+import { BIOMES_CONFIG, type BackgroundLayer } from '../config/backgrounds';
+import { useTerrainStore } from '../stores/useTerrainStore';
+import { VoidShader } from '../shaders/voidShader';
+import { VoidDecorations } from './decorations/VoidDecoration';
+import { Singularity } from './decorations/Singularity';
 
-export function Background() {
-  const { camera } = useThree();
-  const layer1 = useRef<THREE.Mesh>(null!); // Cielo
-  const layer2 = useRef<THREE.Mesh>(null!); // Montañas
+export function AnimatedLayer({ layer, mainCamera }: { layer: BackgroundLayer, mainCamera: THREE.Camera }) {
+    const meshRef = useRef<THREE.Mesh>(null!);
+    const texture = useTexture(layer.texturePath);
 
-  const [texCielo, texMontanas] = useTexture([
-    '/textures/bg/sky.png',
-    '/textures/bg/mountains.png'
-  ]);
+    const columns = layer.columns || 1;
+    const rows = layer.rows || 1;
 
-  // Configurar para que la textura se repita infinitamente
-  [texCielo, texMontanas].forEach(t => {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  });
+    texture.colorSpace = THREE.SRGBColorSpace; 
+    texture.needsUpdate = true;
 
-  useFrame(() => {
-    // El secreto del Parallax: mover el OFFSET de la textura
-    // según la posición X de la cámara
-    const camX = camera.position.x;
-    
-    // El cielo se mueve muy lento (0.01)
-    (layer1.current.material as THREE.MeshBasicMaterial).map!.offset.x = camX * 0.005;
-    
-    // Las montañas un poco más rápido (0.05)
-    (layer2.current.material as THREE.MeshBasicMaterial).map!.offset.x = camX * 0.02;
+    useMemo(() => {
+        // Definimos el tamaño del "recorte" (1/5 del ancho y 1/5 del alto)
+        texture.repeat.set(1 / columns, 1 / rows);
+        texture.magFilter = THREE.NearestFilter;
+        // Importante: Clamp para que no sangre el color de los bordes
+        texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    }, [texture, columns, rows]);
+
+    useFrame((state) => {
+        if (!meshRef.current) return;
+
+        const totalFrames = layer.frames || 1;
+        const fps = layer.fps || 12;
+        const currentFrame = Math.floor(state.clock.getElapsedTime() * fps) % totalFrames;
+
+        // Calculamos columna (X) y fila (Y)
+        const col = currentFrame % columns;
+        const row = Math.floor(currentFrame / columns);
+
+        // En Three.js, Y=0 es la parte INFERIOR de la imagen. 
+        // Si tu animación empieza arriba a la izquierda, invertimos la fila:
+        texture.offset.x = col / columns;
+        texture.offset.y = 1 - (1 / rows) - (row / rows);
+
+        // Posicionamiento
+        meshRef.current.position.x = mainCamera.position.x + (layer.xPos || 0);
+        meshRef.current.position.y = mainCamera.position.y + (layer.yOffset || 0);
+    });
+
+    return (
+        <mesh ref={meshRef} position={[0, 0, layer.z]}>
+            <planeGeometry args={layer.scale || [10, 10]} />
+            <meshBasicMaterial map={texture} transparent depthTest={false} toneMapped={false}/>
+        </mesh>
+    );
+}
+
+function Layer2D({ layer, camera }: { layer: BackgroundLayer, camera: THREE.Camera }) {
+    const meshRef = useRef<THREE.Mesh>(null!);
+    const texture = useTexture(layer.texturePath);
+
+    // Configuramos la repetición infinita
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.magFilter = THREE.NearestFilter;
+
+    useFrame(() => {
+        if (meshRef.current) {
+
+            // 2. POSICIONAMIENTO: Se mueve con la cámara pero con el yOffset
+            // Mantenemos la posición relativa en Z para que no se acerque/aleje
+            meshRef.current.position.x = camera.position.x;
+            meshRef.current.position.y = camera.position.y + (layer.yOffset || 0);
+
+            // 3. PARALLAX: Desplazamos la textura basándonos en el movimiento global
+            // Multiplicamos por la velocidad para el efecto de profundidad
+            texture.offset.x = camera.position.x * layer.speed;
+        }
+    });
+
+    return (
+        <mesh ref={meshRef} position={[0, 0, layer.z]}>
+            <planeGeometry args={layer.scale || [100, 50]} />
+            <meshBasicMaterial
+                map={texture}
+                transparent
+                opacity={layer.opacity ?? 1}
+                depthWrite={false}
+                toneMapped={false}
+            />
+        </mesh>
+    );
+}
+
+function Layer3D({ layer, camera }: { layer: BackgroundLayer, camera: THREE.Camera }) {
+    const groupRef = useRef<THREE.Group>(null!);
+    const { scene } = useGLTF(layer.texturePath);
+    const clonedScene = scene.clone();
+
+    useFrame(() => {
+        if (groupRef.current) {
+            // Para objetos 3D como el sol, el parallax es el movimiento físico opuesto
+            groupRef.current.position.x = camera.position.x * (1 - layer.speed);
+            groupRef.current.position.y = camera.position.y + (layer.yOffset || 0);
+        }
+    });
+
+    return (
+        <primitive
+            ref={groupRef}
+            object={clonedScene}
+            position={[0, 0, layer.z]}
+            scale={layer.scale ? [layer.scale[0], layer.scale[1], layer.scale[0]] : [1, 1, 1]}
+        />
+    );
+}
+
+function FluidLayer({ layer, mainCamera }: { layer: BackgroundLayer, mainCamera: THREE.Camera }) {
+  const meshRef = useRef<THREE.Mesh>(null!);
+  const texture = useTexture(layer.texturePath);
+  
+  // Clonamos el shader para que cada capa pueda tener su propia instancia si se desea
+  const materialArgs = useMemo(() => {
+    const m = JSON.parse(JSON.stringify(VoidShader));
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+
+    m.uniforms.uTexture.value = texture;
+    return m;
+  }, [texture]);
+
+  useFrame((state) => {
+    if (meshRef.current) {
+      // Actualizamos el tiempo para la animación del gas
+      (meshRef.current.material as THREE.ShaderMaterial).uniforms.uTime.value = state.clock.getElapsedTime();
+      
+      // Posicionamiento y Parallax (igual que Layer2D)
+      meshRef.current.position.x = mainCamera.position.x;
+      meshRef.current.position.y = mainCamera.position.y + (layer.yOffset || 0);
+      texture.offset.x = mainCamera.position.x * layer.speed;
+    }
   });
 
   return (
-    <group>
-      {/* Capa 1: Muy lejos */}
-      <mesh ref={layer1} position={[0, 30, -50]}>
-        <planeGeometry args={[100, 60]} />
-        <meshBasicMaterial map={texCielo} transparent />
-      </mesh>
-
-      {/* Capa 2: Media distancia */}
-      <mesh ref={layer2} position={[0, 20, -30]}>
-        <planeGeometry args={[100, 40]} />
-        <meshBasicMaterial map={texMontanas} transparent />
-      </mesh>
-    </group>
+    <mesh ref={meshRef} position={[0, 0, layer.z]}>
+      <planeGeometry args={layer.scale || [100, 50]} />
+      <shaderMaterial 
+        args={[materialArgs]} 
+        transparent 
+        toneMapped={false} 
+        depthTest={false}
+      />
+    </mesh>
   );
+}
+
+export function Background() {
+    const { camera: mainCamera } = useThree();
+    const biome = useTerrainStore(state => state.currentBiome);
+    const layers = BIOMES_CONFIG[biome] || [];
+
+    // Creamos una escena virtual para el fondo
+    const bgScene = useMemo(() => new THREE.Scene(), []);
+    const bgCameraRef = useRef<THREE.OrthographicCamera>(null!);
+
+    useFrame((state) => {
+        if (!bgCameraRef.current) return;
+
+        // 1. Sincronizar posición X/Y
+        bgCameraRef.current.position.x = mainCamera.position.x;
+        bgCameraRef.current.position.y = mainCamera.position.y;
+
+        // 2. LÓGICA DE ZOOM DISCRETO Y DINÁMICO
+        if (mainCamera instanceof THREE.OrthographicCamera) {
+            // EN 2D: Queremos que si el juego tiene zoom 13, el fondo tenga ~10.
+            // Usamos una base de 6 y un multiplicador más bajo (0.3)
+            // Resultado: 6 + (13 * 0.3) = 9.9 (Mucho más natural)
+            bgCameraRef.current.zoom = 6 + (mainCamera.zoom * 0.3);
+        } else if (mainCamera instanceof THREE.PerspectiveCamera) {
+            // EN 3D: El zoom depende de la distancia Z.
+            // Usamos el 80 como punto de referencia (tu posición inicial).
+            const zDiff = mainCamera.position.z - 80;
+            // Si te alejas (zDiff > 0), el zoom del fondo baja muy poco a poco
+            bgCameraRef.current.zoom = 10 - (zDiff * 0.05);
+        }
+
+        bgCameraRef.current.updateProjectionMatrix();
+
+        // 3. Renderizado (El que ya te funciona)
+        state.gl.autoClear = false;
+        state.gl.clear();
+        state.gl.render(bgScene, bgCameraRef.current);
+        state.gl.clearDepth();
+    });
+
+    return createPortal(
+        <group>
+            <OrthographicCamera
+                ref={bgCameraRef}
+                makeDefault={false}
+                position={[0, 0, 100]}
+                zoom={10} // Ajusta según el tamaño de tus planos
+            />
+            <ambientLight intensity={1.5} />
+
+            {layers.map((layer) => {
+                if (layer.isSprite) { return <AnimatedLayer key={layer.id} layer={layer} mainCamera={mainCamera} />; }
+                if (layer.isFluid) return <FluidLayer key={layer.id} layer={layer} mainCamera={mainCamera} />;
+                return layer.is3D ? (
+                    <Layer3D key={layer.id} layer={layer} camera={mainCamera} />
+                ) : (
+                    <Layer2D key={layer.id} layer={layer} camera={mainCamera} />
+                );
+            })}
+
+            {biome === 'THE_VOID' && (
+                <>
+                <VoidDecorations mainCamera={mainCamera} />
+                <Singularity mainCamera={mainCamera} />
+                </>
+            )}
+        </group>,
+        bgScene
+    );
 }

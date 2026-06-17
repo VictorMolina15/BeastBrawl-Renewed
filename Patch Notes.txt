@@ -36,3 +36,14 @@ La lógica se encuentra en useTerrainStore.ts.
 
 Próximos Pasos: añadir el sistema de fondos para los niveles e implementarla estética Cell Shading + Outlines 
 que esta pendiente.
+
+=== DEV VERSION 1.2 [16 de Junio 2026] ===
+-Nuevo sistema de fondos, se construyen en background.ts dónde se importan assets (soporte 2D/spritesheet y 3D) 
+y se definen las posiciones de los mismos, después se montan en Background.tsx aplicando Shaders y configuraciones 
+personalizadas por cada fondo.
+-Primer fondo terminado: The Void, inspirado en el mapa de Territory War (antiguo juego flash) con el mismo nombre.
+
+Nota: el fondo Riot Garden actualmente esta cómo prueba, además hay una falla que ocasiona que al cambiar de 
+perspectiva de cámara esta muestre un ángulo rotado.
+
+Próximos pasos: Diseñar e implementar más fondos e intentar añadir el Cell Shading + Outlines.

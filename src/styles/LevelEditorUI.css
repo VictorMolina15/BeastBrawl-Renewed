@@ -28,6 +28,29 @@
   border: 1px solid #333;
 }
 
+.control-group {
+  display: flex;
+  flex-direction: column;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  gap: 5px;
+}
+
+.biome-select {
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background-color: #2a2a2a;
+  color: #ddd;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.biome-select:hover {
+  border-color: #808080
+}
+
 .editor-hud, .hud-main-row {
     overflow: visible !important; 
 }
@@ -36,7 +59,8 @@
   display: flex;
   flex-direction: column;
   width: 180px;
-  gap: 5px;
+  gap: 8px;
+  margin: 5px;
 }
 
 .brush-label {
