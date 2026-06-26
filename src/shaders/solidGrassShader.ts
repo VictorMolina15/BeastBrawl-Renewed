@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import {OutlineShader} from './OutlineShader';
 export const patchSolidGrassMaterial = (shader: any) => {
   // 1. Definiciones
  shader.vertexShader = shader.vertexShader.replace(
@@ -44,4 +45,5 @@ export const patchSolidGrassMaterial = (shader: any) => {
     diffuseColor.a = diffuseColorOriginal.a;
     `
   );
+  OutlineShader(0.03);
 };

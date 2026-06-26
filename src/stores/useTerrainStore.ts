@@ -148,7 +148,7 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   showGrid: true,
   history: [],
   future: [],
-  currentBiome: 'RIOT_GARDEN',
+  currentBiome: 'EDITOR',
   setBiome: (biome: string) => {
     set({ currentBiome: biome });
   },

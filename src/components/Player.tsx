@@ -1,7 +1,9 @@
 import { useFrame } from '@react-three/fiber';
 import { CapsuleCollider, CoefficientCombineRule, RapierCollider, RapierRigidBody, RigidBody, useRapier } from '@react-three/rapier';
-import { useEffect, useRef, useState } from 'react';
-import { useInputStore } from '../stores/useInputStore'; // <--- IMPORTAMOS TU STORE
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { useInputStore } from '../stores/useInputStore';
+import { Outlines } from '@react-three/drei'; // <-- IMPORTAMOS OUTLINES
+import * as THREE from 'three';
 
 const MOVE_SPEED = 5;
 const JUMP_FORCE = 12;
@@ -11,16 +13,30 @@ export function Player() {
   const playerColliderRef = useRef<RapierCollider>(null!);
   const [isGrounded, setIsGrounded] = useState(false);
   const canJumpRef = useRef(true);
+  const { world, rapier } = useRapier();
 
- const { world, rapier } = useRapier();
-
-  // NOTA: Ya no necesitamos useKeyboardControls. 
-  // Leeremos el estado directamente en el loop de física.
+  // --- 1. GENERADOR DE CEL SHADING (GRADIENT MAP) ---
+  const toonTexture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 3; 
+    canvas.height = 1;
+    const context = canvas.getContext('2d')!;
+    
+    // Dibujamos 3 franjas de luz: Sombra, Tono medio, Luz brillante
+    context.fillStyle = '#444444'; context.fillRect(0, 0, 1, 1);
+    context.fillStyle = '#888888'; context.fillRect(1, 0, 1, 1);
+    context.fillStyle = '#ffffff'; context.fillRect(2, 0, 1, 1);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    // NearestFilter asegura que el corte de luz sea DURO (estilo anime)
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    return texture;
+  }, []);
 
   useFrame(() => {
     if (!rigidBodyRef.current || !playerColliderRef.current) return;
-
-    // 1. GROUND CHECK (Mantenemos tu lógica, funciona bien)
+    
     const origin = rigidBodyRef.current.translation();
     origin.y -= 0.75;
     const direction = { x: 0, y: -1, z: 0 };
@@ -34,15 +50,11 @@ export function Player() {
       if (isGrounded) setIsGrounded(false);
     }
     
-    // 2. INPUTS (NUEVO SISTEMA)
-    // Usamos .getState() para leer los inputs sin provocar re-renders en React
     const actions = useInputStore.getState().activeActions;
-    
     const left = actions['MOVE_LEFT'];
     const right = actions['MOVE_RIGHT'];
     const jump = actions['JUMP'];
-
-    // 3. FÍSICAS
+    
     const linvel = rigidBodyRef.current.linvel();
     
     if (right) linvel.x = MOVE_SPEED;
@@ -50,7 +62,6 @@ export function Player() {
     else linvel.x = 0;
     
     rigidBodyRef.current.setLinvel({ x: linvel.x, y: linvel.y, z: 0 }, true);
-
     if (jump && isGrounded && canJumpRef.current) {
       rigidBodyRef.current.setLinvel({ x: linvel.x, y: 0, z: linvel.z }, true);
       rigidBodyRef.current.applyImpulse({ x: 0, y: JUMP_FORCE, z: 0 }, true);
@@ -85,8 +96,17 @@ export function Player() {
         restitution={0}
       />
       <mesh>
-        <capsuleGeometry args={[0.5, 0.50 * 2, 4, 8]} />
-        <meshStandardMaterial color="royalblue" />
+        {/* Aumentamos un pelín los segmentos para que el outline negro no se vea picudo */}
+        <capsuleGeometry args={[0.5, 0.50 * 2, 8, 16]} />
+        
+        {/* 2. APLICAMOS EL MATERIAL TOON */}
+        <meshToonMaterial 
+            color="royalblue" 
+            gradientMap={toonTexture} 
+        />
+        
+        {/* 3. EL BORDE NEGRO (Inverted Hull) */}
+        <Outlines thickness={1.5} color="black" />
       </mesh>
     </RigidBody>
   );

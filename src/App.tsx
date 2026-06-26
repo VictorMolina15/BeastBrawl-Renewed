@@ -1,5 +1,6 @@
-import { Canvas,useThree, useFrame } from '@react-three/fiber';
-import { Stats, OrbitControls, PerspectiveCamera, OrthographicCamera } from '@react-three/drei'; // <--- IMPORTAR CÁMARAS
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { Stats, OrbitControls, PerspectiveCamera, OrthographicCamera } from '@react-three/drei';
+import { EffectComposer, Outline, Selection, Select } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsType } from 'three-stdlib';
 import { useTerrainStore } from './stores/useTerrainStore';
@@ -20,15 +21,14 @@ const INITIAL_Z_OFFSET = 120; // Qué tan atrás está la cámara
 
 const CameraLogger = ({ domRef }: { domRef: React.RefObject<HTMLDivElement> }) => {
   const { camera } = useThree();
-  
+
   useFrame(() => {
     if (domRef.current) {
-      // Formateamos bonito los números
       const x = camera.position.x.toFixed(1);
       const y = camera.position.y.toFixed(1);
       const z = camera.position.z.toFixed(1);
-      const zoom = camera.type === 'OrthographicCamera' 
-        ? `Zoom: ${camera.zoom.toFixed(2)}` 
+      const zoom = camera.type === 'OrthographicCamera'
+        ? `Zoom: ${camera.zoom.toFixed(2)}`
         : `FOV: ${camera instanceof THREE.PerspectiveCamera ? camera.fov : 'N/A'}`;
 
       domRef.current.innerText = `POS: [${x}, ${y}, ${z}]\n${zoom}`;
@@ -38,97 +38,114 @@ const CameraLogger = ({ domRef }: { domRef: React.RefObject<HTMLDivElement> }) =
 };
 
 const CameraController = ({ isOrthographic, isShiftPressed }: { isOrthographic: boolean, isShiftPressed: boolean }) => {
-    const controlsRef = useRef<OrbitControlsType>(null);
-    const { camera } = useThree();
+  const controlsRef = useRef<OrbitControlsType>(null);
+  const { camera } = useThree();
 
-    useEffect(() => {
-        if (controlsRef.current) {
-            controlsRef.current.target.set(INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]);
-            controlsRef.current.update();
-            camera.lookAt(INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]);
-        }
-    }, [isOrthographic, camera]);
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.target.set(INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]);
+      controlsRef.current.update();
+      camera.lookAt(INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]);
+    }
+  }, [isOrthographic, camera]);
 
-    return (
-        <OrbitControls 
-            ref={controlsRef}
-            key={isOrthographic ? 'ortho' : 'persp'}
-            
-            // 2. SIEMPRE HABILITADO (Para que el click medio funcione sin teclas)
-            enabled={true} 
-            
-            // 3. CONFIGURACIÓN DE PANE (Arrastre)
-            enablePan={true} // Permitir arrastrar siempre
-            panSpeed={isOrthographic ? 1 : 2} // Ajustar velocidad si se siente lento
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      key={isOrthographic ? 'ortho' : 'persp'}
 
-            // 4. CONFIGURACIÓN DE ROTACIÓN
-            // Solo permitimos rotar si SHIFT está presionado (Tu requisito)
-            enableRotate={!isOrthographic && isShiftPressed} 
-            
-            // 5. MAPEO DE BOTONES DEL MOUSE
-            mouseButtons={{
-                LEFT: undefined,     // Dejamos el izquierdo libre para el juego (Poner Bloques)
-                MIDDLE: MOUSE.PAN,   // Click Medio = Arrastrar (Pan)
-                RIGHT: MOUSE.ROTATE  // Click Derecho = Rotar (Solo funciona si enableRotate es true)
-            }}
+      // 2. SIEMPRE HABILITADO (Para que el click medio funcione sin teclas)
+      enabled={true}
 
-            zoomSpeed={isOrthographic ? 1 : 0.5}
-            target={[INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]]}
-        />
-    );
+      // 3. CONFIGURACIÓN DE PANE (Arrastre)
+      enablePan={true} // Permitir arrastrar siempre
+      panSpeed={isOrthographic ? 1 : 2} // Ajustar velocidad si se siente lento
+
+      // 4. CONFIGURACIÓN DE ROTACIÓN
+      // Solo permitimos rotar si SHIFT está presionado (Tu requisito)
+      enableRotate={!isOrthographic && isShiftPressed}
+
+      // 5. MAPEO DE BOTONES DEL MOUSE
+      mouseButtons={{
+        LEFT: undefined,     // Dejamos el izquierdo libre para el juego (Poner Bloques)
+        MIDDLE: MOUSE.PAN,   // Click Medio = Arrastrar (Pan)
+        RIGHT: MOUSE.ROTATE  // Click Derecho = Rotar (Solo funciona si enableRotate es true)
+      }}
+
+      zoomSpeed={isOrthographic ? 1 : 0.5}
+      target={[INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_CENTER[2]]}
+    />
+  );
 }
 
 export default function App() {
   const mapId = useTerrainStore((state) => state.mapId);
-  const [isOrthographic, setIsOrthographic] = useState(true); 
+  const [isOrthographic, setIsOrthographic] = useState(true);
   const toggleCamera = () => setIsOrthographic(prev => !prev);
   const cameraInfoRef = useRef<HTMLDivElement>(null!);
 
   // 1. USAMOS EL NUEVO SISTEMA DE INPUT
-  // Nos suscribimos solo a la acción 'ROTATE_CAMERA'
   const isRotatePressed = useInputStore((state) => state.activeActions['ROTATE_CAMERA']);
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <InputManager />
-      <UI 
-        isOrthographic={isOrthographic} 
-        toggleCamera={toggleCamera} 
-        cameraInfoRef={cameraInfoRef} 
+      <UI
+        isOrthographic={isOrthographic}
+        toggleCamera={toggleCamera}
+        cameraInfoRef={cameraInfoRef}
       />
 
       <Canvas>
         <CameraLogger domRef={cameraInfoRef} />
 
         {isOrthographic ? (
-            <OrthographicCamera 
-                makeDefault 
-                position={[INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_Z_OFFSET]} 
-                zoom={INITIAL_ZOOM}
-                near={-100} far={1000}
-            />
+          <OrthographicCamera
+            makeDefault
+            position={[INITIAL_CENTER[0], INITIAL_CENTER[1], INITIAL_Z_OFFSET]}
+            zoom={INITIAL_ZOOM}
+            near={-100} far={1000}
+          />
         ) : (
-            <PerspectiveCamera 
-                makeDefault 
-                position={[INITIAL_CENTER[0], INITIAL_CENTER[1], 80]} 
-                fov={50}
-                near={0.1} far={1000}
-            />
+          <PerspectiveCamera
+            makeDefault
+            position={[INITIAL_CENTER[0], INITIAL_CENTER[1], 80]}
+            fov={50}
+            near={0.1} far={1000}
+          />
         )}
         <Background />
-        <Physics debug gravity={[0, -20, 0]}>
+        <Physics /*debug*/ gravity={[0, -20, 0]}>
           <ambientLight intensity={1.5} />
           <directionalLight position={[100, 100, 100]} intensity={1.5} />
-          <Terrain />
+          {/* 1. El EffectComposer vive fuera de cualquier lógica de terreno */}
+          <Selection>
+
+            <EffectComposer autoClear={false} enableNormalPass={false} multisampling={0}>
+              <Outline
+                blur={false}
+                visibleEdgeColor={0x0000}
+                hiddenEdgeColor={0x0000}
+                edgeStrength={100}
+                width={1000}
+              />
+            </EffectComposer>
+
+            {/* 3. TU ESCENARIO: Envolvemos los bloques o el Chunk en <Select> */}
+            <Select enabled={true}>
+              <Terrain />
+            </Select>
+
+          </Selection>
           <PlacementGrid />
           <Player key={mapId} />
-          
+
           {/* CONTROLADOR DE CÁMARA EXTRAÍDO */}
-          <CameraController 
-            isOrthographic={isOrthographic} 
-            isShiftPressed={isRotatePressed} // Ahora usa el store, no el evento nativo
+          <CameraController
+            isOrthographic={isOrthographic}
+            isShiftPressed={isRotatePressed}
           />
-          <Stats /> 
+          <Stats />
         </Physics>
       </Canvas>
     </div>

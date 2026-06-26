@@ -47,3 +47,10 @@ Nota: el fondo Riot Garden actualmente esta cómo prueba, además hay una falla 
 perspectiva de cámara esta muestre un ángulo rotado.
 
 Próximos pasos: Diseñar e implementar más fondos e intentar añadir el Cell Shading + Outlines.
+
+=== DEV VERSION 1.3 [26 de Junio 2026] ===
+- Outlines + Cell Shading implementados en jugador y tentantativamente en los bloques, tiene buen aspecto pero afecta
+ el rendimiento, además falta corregir dos problemas, el 1ro que hace que también sombree los props (hierba alta/flores)
+ y el 2do deshabilita el renderizado del background.
+
+ Próximo pasos: solucionar los errores anteriormente planteados
