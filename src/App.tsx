@@ -14,6 +14,7 @@ import { InputManager } from './components/InputManager';
 import { useInputStore } from './stores/useInputStore';
 import { Background } from './components/Background';
 import { MOUSE } from 'three';
+import { BlendFunction } from 'postprocessing';
 
 const INITIAL_CENTER = [63, 30, 0] as const;
 const INITIAL_ZOOM = 13;
@@ -121,13 +122,15 @@ export default function App() {
           {/* 1. El EffectComposer vive fuera de cualquier lógica de terreno */}
           <Selection>
 
-            <EffectComposer autoClear={false} enableNormalPass={false} multisampling={0}>
+            <EffectComposer renderPriority={1} autoClear={false} enableNormalPass={false} multisampling={0}>
               <Outline
+                xRay={false}
+                blendFunction={BlendFunction.ALPHA}
                 blur={false}
-                visibleEdgeColor={0x0000}
-                hiddenEdgeColor={0x0000}
+                visibleEdgeColor={0x000000}
+                hiddenEdgeColor={0x000000}
                 edgeStrength={100}
-                width={1000}
+                width={2000}
               />
             </EffectComposer>
 
