@@ -174,6 +174,16 @@ type RenderGroup = {
 
 };
 
+const SHAPE_MAPPING: Record<keyof RenderGroup, string> = {
+  cubes: 'CUBE', ramps: 'RAMP', traps: 'TRAP',
+  rampsDown: 'RAMP_DOWN', trapsDown: 'TRAP_DOWN',
+  roundFull: 'ROUND_FULL', roundLeft: 'ROUND_LEFT',
+  roundRight: 'ROUND_RIGHT', roundTop: 'ROUND_TOP',
+  roundBottom: 'ROUND_BOTTOM', props: 'PROP'
+};
+
+const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
+
 // ==========================================
 // 2. SUB-COMPONENTE: CHUNK LAYER
 // Se encarga de renderizar UN material específico.
@@ -268,17 +278,27 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   // Helper para actualizar matrices
   const updateRef = (key: keyof RenderGroup, matrices: THREE.Matrix4[]) => {
     const mesh = refs.current[key];
-    if (mesh && matrices.length > 0) {
-      for (let i = 0; i < matrices.length; i++) mesh.setMatrixAt(i, matrices[i]);
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.geometry) mesh.computeBoundingSphere();
-
-      // Si usamos el material de pasto, necesitamos colorear cada instancia
-      if (isGrass || isProp) {
-        const c = new THREE.Color(targetColorHex);
-        for (let i = 0; i < matrices.length; i++) mesh.setColorAt(i, c);
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    if (mesh) {
+      const capacity = capacities.current[key] || 32;
+      
+      for (let i = 0; i < capacity; i++) {
+        if (i < matrices.length) {
+          // Asignar matriz real a los bloques que sí existen
+          mesh.setMatrixAt(i, matrices[i]);
+          
+          // Asignar color individual si aplica (Ej: Pasto o Props)
+          if (isGrass || isProp) {
+            mesh.setColorAt(i, new THREE.Color(targetColorHex));
+          }
+        } else {
+          // "Ocultar" los espacios sobrantes del Buffer encogiéndolos a tamaño 0
+          mesh.setMatrixAt(i, ZERO_MATRIX);
+        }
       }
+      
+      mesh.instanceMatrix.needsUpdate = true;
+      if ((isGrass || isProp) && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      if (mesh.geometry) mesh.computeBoundingSphere();
     }
   };
 
@@ -396,38 +416,37 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
     }
   };
 
+  // Control de memoria para evitar la destrucción del Mesh
+  const capacities = useRef<Record<string, number>>({});
+  const getCapacity = (shapeKey: string, currentLength: number) => {
+    let cap = capacities.current[shapeKey] || 32; // Inicia reservando 32 espacios
+    if (cap < currentLength) {
+      while (cap < currentLength) cap *= 2; // Crece de golpe (64, 128, 256...)      
+    }
+    capacities.current[shapeKey] = cap;
+    return cap;
+  };
+
   return (
     <group>
-      <instancedMesh ref={(el) => { refs.current.cubes = el! }} args={[getGeo('CUBE'), undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" />
-      </instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.ramps = el! }} args={[getGeo('RAMP'), undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.traps = el! }} args={[getGeo('TRAP'), undefined, group.traps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.rampsDown = el! }} args={[getGeo('RAMP_DOWN'), undefined, group.rampsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.trapsDown = el! }} args={[getGeo('TRAP_DOWN'), undefined, group.trapsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
+      {(Object.keys(SHAPE_MAPPING) as Array<keyof RenderGroup>).map((key) => {
+        const matrices = group[key];
+        const capacity = getCapacity(key, matrices.length);
+        const geoName = SHAPE_MAPPING[key];
 
-      <instancedMesh ref={(el) => { refs.current.roundFull = el! }} args={[getGeo('ROUND_FULL'), undefined, group.roundFull.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.roundLeft = el! }} args={[getGeo('ROUND_LEFT'), undefined, group.roundLeft.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.roundRight = el! }} args={[getGeo('ROUND_RIGHT'), undefined, group.roundRight.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.roundTop = el! }} args={[getGeo('ROUND_TOP'), undefined, group.roundTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-      <instancedMesh ref={(el) => { refs.current.roundBottom = el! }} args={[getGeo('ROUND_BOTTOM'), undefined, group.roundBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}>
-        <primitive object={activeMaterial} attach="material" /></instancedMesh>
-        <instancedMesh
-          ref={(el) => { refs.current.props = el! }}
-          args={[getGeo('PROP'), undefined, group.props.length]}
-          onClick={onClick} onContextMenu={onContext}
-          frustumCulled={false}
-        >
-          <primitive object={activeMaterial} attach="material" />
-        </instancedMesh>
+        return (
+          <instancedMesh
+            key={`${key}_${capacity}`}
+            ref={(el) => { refs.current[key] = el! }}
+            args={[getGeo(geoName), undefined, capacity]} 
+            onClick={onClick}
+            onContextMenu={onContext}
+            frustumCulled={false}
+          >
+            <primitive object={activeMaterial} attach="material" />
+          </instancedMesh>
+        );
+      })}
     </group>
   );
 };
@@ -530,6 +549,18 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
       if (matDef?.type === 'PROP') return false;
       return true;
     };
+
+    // NUEVO SHORTCUT LOCAL (Evita llamar a Zustand si el bloque está dentro de este mismo Chunk)
+    const isSolid = (lx: number, ly: number, lz: number) => {
+      if (lx >= 0 && lx < chunkSize && ly >= 0 && ly < chunkSize && lz >= 0 && lz < chunkSize) {
+        const index = lz * chunkSize * chunkSize + ly * chunkSize + lx;
+        const matId = data[index];
+        if (matId === 0) return false;
+        return MATERIALS_DB[matId]?.type !== 'PROP';
+      }
+      return isSolidGlobal(lx, ly, lz); // Solo salta al estado global en los límites del chunk
+    };
+
     const getMaterial = (index: number) => data[index];
     const getVariation = (index: number) => variations ? variations[index] : 0;
 
@@ -541,18 +572,18 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
           if (matId === 0) continue;
 
           // Vecinos Directos
-          const top = isSolidGlobal(x, y + 1, z);
-          const bottom = isSolidGlobal(x, y - 1, z);
-          const left = isSolidGlobal(x - 1, y, z);
-          const right = isSolidGlobal(x + 1, y, z);
-          const front = isSolidGlobal(x, y, z + 1);
-          const back = isSolidGlobal(x, y, z - 1);
+          const top = isSolid(x, y + 1, z);
+          const bottom = isSolid(x, y - 1, z);
+          const left = isSolid(x - 1, y, z);
+          const right = isSolid(x + 1, y, z);
+          const front = isSolid(x, y, z + 1);
+          const back = isSolid(x, y, z - 1);
 
           // Diagonales (Cruciales para V2.1)
-          const topLeft = isSolidGlobal(x - 1, y + 1, z);
-          const topRight = isSolidGlobal(x + 1, y + 1, z);
-          const bottomLeft = isSolidGlobal(x - 1, y - 1, z);
-          const bottomRight = isSolidGlobal(x + 1, y - 1, z);
+          const topLeft = isSolid(x - 1, y + 1, z);
+          const topRight = isSolid(x + 1, y + 1, z);
+          const bottomLeft = isSolid(x - 1, y - 1, z);
+          const bottomRight = isSolid(x + 1, y - 1, z);
 
           // Culling (Optimización)
           const matDef = MATERIALS_DB[matId];
@@ -685,12 +716,12 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
             // Convertir RAMP a TRAP si tiene otra rampa arriba o abajo en la misma dirección
             if (shapeType === 'RAMP') {
               const hasRampAbove = top && (
-                (left && !isSolidGlobal(x - 1, y + 1, z)) ||
-                (!left && !isSolidGlobal(x + 1, y + 1, z))
+                (left && !isSolid(x - 1, y + 1, z)) ||
+                (!left && !isSolid(x + 1, y + 1, z))
               );
               const hasRampBelow = bottom && (
-                (left && !isSolidGlobal(x - 1, y - 1, z)) ||
-                (!left && !isSolidGlobal(x + 1, y - 1, z))
+                (left && !isSolid(x - 1, y - 1, z)) ||
+                (!left && !isSolid(x + 1, y - 1, z))
               );
 
               if (hasRampAbove || hasRampBelow) {
