@@ -1,6 +1,5 @@
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { Stats, OrbitControls, PerspectiveCamera, OrthographicCamera } from '@react-three/drei';
-import { EffectComposer, Outline, Selection, Select } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsType } from 'three-stdlib';
 import { useTerrainStore } from './stores/useTerrainStore';
@@ -118,25 +117,7 @@ export default function App() {
         <Physics /*debug*/ gravity={[0, -20, 0]}>
           <ambientLight intensity={1.5} />
           <directionalLight position={[100, 100, 100]} intensity={1.5} />
-          {/* 1. El EffectComposer vive fuera de cualquier lógica de terreno */}
-          <Selection>
-
-            <EffectComposer autoClear={false} enableNormalPass={false} multisampling={0}>
-              <Outline
-                blur={false}
-                visibleEdgeColor={0x0000}
-                hiddenEdgeColor={0x0000}
-                edgeStrength={100}
-                width={1000}
-              />
-            </EffectComposer>
-
-            {/* 3. TU ESCENARIO: Envolvemos los bloques o el Chunk en <Select> */}
-            <Select enabled={true}>
-              <Terrain />
-            </Select>
-
-          </Selection>
+          <Terrain />
           <PlacementGrid />
           <Player key={mapId} />
 

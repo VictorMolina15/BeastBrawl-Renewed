@@ -189,7 +189,37 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   baseTexture: THREE.Texture // Textura base
 }) => {
   const refs = useRef<Record<string, THREE.InstancedMesh>>(null!);
+  const outlineRefs = useRef<Record<string, THREE.InstancedMesh>>(null!);
   if (!refs.current) refs.current = {};
+  if (!outlineRefs.current) outlineRefs.current = {};
+
+  const outlineScaleMatrix = useMemo(() => new THREE.Matrix4().makeScale(1.08, 1.08, 1.08), []);
+  const outlineMaterial = useMemo(() => new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    side: THREE.BackSide,
+    depthWrite: false,
+    toneMapped: false,
+  }), []);
+
+  const toonGradientMap = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 3;
+    canvas.height = 1;
+    const context = canvas.getContext('2d')!;
+
+    context.fillStyle = '#333333';
+    context.fillRect(0, 0, 1, 1);
+    context.fillStyle = '#888888';
+    context.fillRect(1, 0, 1, 1);
+    context.fillStyle = '#ffffff';
+    context.fillRect(2, 0, 1, 1);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
 
   const [matId, varId] = groupKey.split('_').map(Number);
   const materialDef = MATERIALS_DB[matId];
@@ -219,7 +249,7 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
     // 3. GENERAR MATERIAL
     if (effectiveAtlasPos && baseTexture) {
 
-      const mat = new THREE.MeshStandardMaterial({
+      const mat = isProp ? new THREE.MeshStandardMaterial({
         map: baseTexture.clone(),
         roughness: 0.8,
         transparent: isProp,
@@ -227,6 +257,13 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
         side: isProp ? THREE.DoubleSide : THREE.FrontSide,
         color: effectiveColor,
         vertexColors: isProp ? true : false,
+      }) : new THREE.MeshToonMaterial({
+        map: baseTexture.clone(),
+        gradientMap: toonGradientMap,
+        transparent: false,
+        alphaTest: 0.5,
+        side: THREE.FrontSide,
+        color: effectiveColor,
       });
 
       if (mat.map) {
@@ -253,9 +290,12 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
     }
 
     // Fallback para materiales sin textura
-    return new THREE.MeshStandardMaterial({ color: effectiveColor || 'white' });
+    return new THREE.MeshToonMaterial({
+      color: effectiveColor || 'white',
+      gradientMap: toonGradientMap,
+    });
 
-  }, [isGrass, isProp, grassMaterial, materialDef, baseTexture, varId, targetColorHex]);
+  }, [isGrass, isProp, grassMaterial, materialDef, baseTexture, varId, targetColorHex, toonGradientMap]);
 
   // Hook de animación para el viento (actualiza el material generado arriba)
   useFrame((state) => {
@@ -265,10 +305,13 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   });
 
   // Helper para actualizar matrices
-  const updateRef = (key: keyof RenderGroup, matrices: THREE.Matrix4[]) => {
-    const mesh = refs.current[key];
+  const updateRef = (targetRefs: Record<string, THREE.InstancedMesh>, key: keyof RenderGroup, matrices: THREE.Matrix4[], expand = false) => {
+    const mesh = targetRefs[key];
     if (mesh && matrices.length > 0) {
-      for (let i = 0; i < matrices.length; i++) mesh.setMatrixAt(i, matrices[i]);
+      for (let i = 0; i < matrices.length; i++) {
+        const matrix = expand ? matrices[i].clone().multiply(outlineScaleMatrix) : matrices[i];
+        mesh.setMatrixAt(i, matrix);
+      }
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.geometry) mesh.computeBoundingSphere();
 
@@ -353,8 +396,11 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   const trapDownGeo = useMemo(() => createUpsideDownGeometry(baseNodes.TrapBase?.geometry || trapGeoVisual), [baseNodes]);
 
   useLayoutEffect(() => {
-    (Object.keys(group) as Array<keyof RenderGroup>).forEach(key => updateRef(key, group[key]));
-  }, [group]);// eslint-disable-line react-hooks/exhaustive-deps
+    (Object.keys(group) as Array<keyof RenderGroup>).forEach(key => {
+      updateRef(refs.current, key, group[key]);
+      updateRef(outlineRefs.current, key, group[key], true);
+    });
+  }, [group, outlineScaleMatrix]);// eslint-disable-line react-hooks/exhaustive-deps
 
   const getGeo = (shape: string) => {
     if (isGrass) {
@@ -397,26 +443,66 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
 
   return (
     <group>
-      {group.cubes.length > 0 && <instancedMesh ref={(el) => { refs.current.cubes = el! }} args={[getGeo('CUBE'), undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.ramps.length > 0 && <instancedMesh ref={(el) => { refs.current.ramps = el! }} args={[getGeo('RAMP'), undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.traps.length > 0 && <instancedMesh ref={(el) => { refs.current.traps = el! }} args={[getGeo('TRAP'), undefined, group.traps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.rampsDown.length > 0 && <instancedMesh ref={(el) => { refs.current.rampsDown = el! }} args={[getGeo('RAMP_DOWN'), undefined, group.rampsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.trapsDown.length > 0 && <instancedMesh ref={(el) => { refs.current.trapsDown = el! }} args={[getGeo('TRAP_DOWN'), undefined, group.trapsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
+      {group.cubes.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.cubes = el! }} args={[getGeo('CUBE'), undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.cubes = el! }} args={[getGeo('CUBE'), undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.ramps.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.ramps = el! }} args={[getGeo('RAMP'), undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.ramps = el! }} args={[getGeo('RAMP'), undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.traps.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.traps = el! }} args={[getGeo('TRAP'), undefined, group.traps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.traps = el! }} args={[getGeo('TRAP'), undefined, group.traps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.rampsDown.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.rampsDown = el! }} args={[getGeo('RAMP_DOWN'), undefined, group.rampsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.rampsDown = el! }} args={[getGeo('RAMP_DOWN'), undefined, group.rampsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.trapsDown.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.trapsDown = el! }} args={[getGeo('TRAP_DOWN'), undefined, group.trapsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.trapsDown = el! }} args={[getGeo('TRAP_DOWN'), undefined, group.trapsDown.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
 
-      {group.roundFull.length > 0 && <instancedMesh ref={(el) => { refs.current.roundFull = el! }} args={[getGeo('ROUND_FULL'), undefined, group.roundFull.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.roundLeft.length > 0 && <instancedMesh ref={(el) => { refs.current.roundLeft = el! }} args={[getGeo('ROUND_LEFT'), undefined, group.roundLeft.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.roundRight.length > 0 && <instancedMesh ref={(el) => { refs.current.roundRight = el! }} args={[getGeo('ROUND_RIGHT'), undefined, group.roundRight.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.roundTop.length > 0 && <instancedMesh ref={(el) => { refs.current.roundTop = el! }} args={[getGeo('ROUND_TOP'), undefined, group.roundTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
-      {group.roundBottom.length > 0 && <instancedMesh ref={(el) => { refs.current.roundBottom = el! }} args={[getGeo('ROUND_BOTTOM'), undefined, group.roundBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>}
+      {group.roundFull.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.roundFull = el! }} args={[getGeo('ROUND_FULL'), undefined, group.roundFull.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.roundFull = el! }} args={[getGeo('ROUND_FULL'), undefined, group.roundFull.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.roundLeft.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.roundLeft = el! }} args={[getGeo('ROUND_LEFT'), undefined, group.roundLeft.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.roundLeft = el! }} args={[getGeo('ROUND_LEFT'), undefined, group.roundLeft.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.roundRight.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.roundRight = el! }} args={[getGeo('ROUND_RIGHT'), undefined, group.roundRight.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.roundRight = el! }} args={[getGeo('ROUND_RIGHT'), undefined, group.roundRight.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.roundTop.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.roundTop = el! }} args={[getGeo('ROUND_TOP'), undefined, group.roundTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.roundTop = el! }} args={[getGeo('ROUND_TOP'), undefined, group.roundTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
+      {group.roundBottom.length > 0 && <>
+        <instancedMesh ref={(el) => { outlineRefs.current.roundBottom = el! }} args={[getGeo('ROUND_BOTTOM'), undefined, group.roundBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMaterial} attach="material" /></instancedMesh>
+        <instancedMesh ref={(el) => { refs.current.roundBottom = el! }} args={[getGeo('ROUND_BOTTOM'), undefined, group.roundBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
+      </>}
       {group.props.length > 0 && (
-        <instancedMesh
-          ref={(el) => { refs.current.props = el! }}
-          args={[getGeo('PROP'), undefined, group.props.length]}
-          onClick={onClick} onContextMenu={onContext}
-          frustumCulled={false}
-        >
-          <primitive object={activeMaterial} attach="material" />
-        </instancedMesh>
+        <>
+          <instancedMesh
+            ref={(el) => { outlineRefs.current.props = el! }}
+            args={[getGeo('PROP'), undefined, group.props.length]}
+            onClick={onClick} onContextMenu={onContext}
+            frustumCulled={false}
+          >
+            <primitive object={outlineMaterial} attach="material" />
+          </instancedMesh>
+          <instancedMesh
+            ref={(el) => { refs.current.props = el! }}
+            args={[getGeo('PROP'), undefined, group.props.length]}
+            onClick={onClick} onContextMenu={onContext}
+            frustumCulled={false}
+          >
+            <primitive object={activeMaterial} attach="material" />
+          </instancedMesh>
+        </>
       )}
     </group>
   );

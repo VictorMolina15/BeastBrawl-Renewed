@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber';
 import { CapsuleCollider, CoefficientCombineRule, RapierCollider, RapierRigidBody, RigidBody, useRapier } from '@react-three/rapier';
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useInputStore } from '../stores/useInputStore';
 import { Outlines } from '@react-three/drei'; // <-- IMPORTAMOS OUTLINES
 import * as THREE from 'three';
@@ -11,7 +11,7 @@ const JUMP_FORCE = 12;
 export function Player() {
   const rigidBodyRef = useRef<RapierRigidBody>(null!);
   const playerColliderRef = useRef<RapierCollider>(null!);
-  const [isGrounded, setIsGrounded] = useState(false);
+  const isGroundedRef = useRef(false);
   const canJumpRef = useRef(true);
   const { world, rapier } = useRapier();
 
@@ -44,10 +44,10 @@ export function Player() {
     const hit = world.castRayAndGetNormal(ray, 0.5, true, undefined, undefined, playerColliderRef.current);
     
     if (hit && hit.normal && hit.normal.y > 0.7) {
-      if (!isGrounded) setIsGrounded(true);
+      isGroundedRef.current = true;
       canJumpRef.current = true;
     } else {
-      if (isGrounded) setIsGrounded(false);
+      isGroundedRef.current = false;
     }
     
     const actions = useInputStore.getState().activeActions;
@@ -62,7 +62,7 @@ export function Player() {
     else linvel.x = 0;
     
     rigidBodyRef.current.setLinvel({ x: linvel.x, y: linvel.y, z: 0 }, true);
-    if (jump && isGrounded && canJumpRef.current) {
+    if (jump && isGroundedRef.current && canJumpRef.current) {
       rigidBodyRef.current.setLinvel({ x: linvel.x, y: 0, z: linvel.z }, true);
       rigidBodyRef.current.applyImpulse({ x: 0, y: JUMP_FORCE, z: 0 }, true);
       canJumpRef.current = false;
@@ -106,7 +106,7 @@ export function Player() {
         />
         
         {/* 3. EL BORDE NEGRO (Inverted Hull) */}
-        <Outlines thickness={1.5} color="black" />
+        <Outlines thickness={2} color="black" />
       </mesh>
     </RigidBody>
   );

@@ -17,7 +17,7 @@ interface InputState {
   setKeyPressed: (key: string, pressed: boolean) => void;
 }
 
-export const useInputStore = create<InputState>()(subscribeWithSelector((set, get) => ({
+export const useInputStore = create<InputState>()(subscribeWithSelector((set) => ({
   // CONFIGURACIÓN INICIAL (El "Banco")
   keyMap: {
     'ROTATE_CAMERA': 'Shift',
