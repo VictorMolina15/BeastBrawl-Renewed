@@ -162,6 +162,10 @@ interface ChunkProps {
 
 type RenderGroup = {
   cubes: THREE.Matrix4[];
+  cubesOutline: THREE.Matrix4[];
+  cubesOutlineFlat: THREE.Matrix4[];
+  cubesOutlinePivotTop: THREE.Matrix4[]; 
+  cubesOutlinePivotBottom: THREE.Matrix4[];
   ramps: THREE.Matrix4[];
   traps: THREE.Matrix4[];
   rampsDown: THREE.Matrix4[];
@@ -194,19 +198,18 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   if (!refs.current) refs.current = {};
   if (!outlineRefs.current) outlineRefs.current = {};
 
-  // Declaramos un material estándar (para cubos) y uno con offset (para Rampas/Traps)
-// 1. Material Estándar (Cubos, Rounded, Props) - Pivote en el centro
+  // Materiales para Outlines
   const outlineMatStandard = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.03, [0, 0, 0])), []);
-  
-  // 2. Material con Offset NORMAL (Ramps)
-  const outlineMatOffsetR = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.02, [0.5, -0.5, 0])), []);
 
-  // 3. Material con Offset INVERTIDO (RampsDown )
-  // Al rotar 180° en X, invertimos matemáticamente los ejes Y y Z del pivote
-  const outlineMatOffsetDownR = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.02, [0.5, 0.5, 0])), []);
+  const outlineMatOffsetR = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.015, [0.5, -0.5, 0])), []);
+  const outlineMatOffsetDownR = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.015, [0.5, 0.5, 0])), []);
 
   const outlineMatOffsetT = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.015, [0.5, -0.5, 0])), []);
   const outlineMatOffsetDownT = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.015, [0.5, 0.5, 0])), []);
+
+  const outlineMatFlatY = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.02, [0, 0, 0], [1.5, 0.0, 1.5])), []);
+  const outlineMatPivotTop = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.02, [0, 0.3, 0], [1.4, 1, 1.5])), []);
+  const outlineMatPivotBottom = useMemo(() => new THREE.ShaderMaterial(OutlineShader(0.02, [0, -0.3, 0], [1.4, 1., 1.5])), []);
 
   const toonGradientMap = useMemo(() => {
     const canvas = document.createElement('canvas');
@@ -401,12 +404,33 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   const rampDownGeo = useMemo(() => createUpsideDownGeometry(baseNodes.RampBase?.geometry || rampGeoVisual), [baseNodes]);
   const trapDownGeo = useMemo(() => createUpsideDownGeometry(baseNodes.TrapBase?.geometry || trapGeoVisual), [baseNodes]);
 
- useLayoutEffect(() => {
-    (Object.keys(group) as Array<keyof RenderGroup>).forEach(key => {
-      updateRef(refs.current, key, group[key]);
-      updateRef(outlineRefs.current, key, group[key]); 
-    });
-  }, [group]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+      (Object.keys(group) as Array<keyof RenderGroup>).forEach(key => {
+        // Ignoramos las llaves Outline para no procesarlas doble
+        if (key.includes('Outline')) return; 
+
+        // 1. Matriz de color principal
+        updateRef(refs.current, key, group[key]); 
+        
+        // 2. Matriz de Outline Normal
+        const outlineKey = `${key}Outline` as keyof RenderGroup;
+        const outlineData = group[outlineKey] || group[key]; // Fallback para ramps/traps
+        updateRef(outlineRefs.current, key, outlineData);
+
+        // 3. Matriz de Outline Plano (Exclusivo para los cubos debajo de las rampas)
+        const flatKey = `${key}OutlineFlat` as keyof RenderGroup;
+        if (group[flatKey]) {
+          updateRef(outlineRefs.current, flatKey, group[flatKey]);
+        }
+
+        const pivotTopKey = `${key}OutlinePivotTop` as keyof RenderGroup;
+        if (group[pivotTopKey]) updateRef(outlineRefs.current, pivotTopKey, group[pivotTopKey]);
+
+        const pivotBottomKey = `${key}OutlinePivotBottom` as keyof RenderGroup;
+        if (group[pivotBottomKey]) updateRef(outlineRefs.current, pivotBottomKey, group[pivotBottomKey]);
+
+        });
+    }, [group]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getGeo = (shape: string) => {
     if (isGrass) {
@@ -449,10 +473,22 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
 
   return (
     <group>
-      {group.cubes.length > 0 && <>
-        <instancedMesh ref={(el) => { outlineRefs.current.cubes = el! }} args={[getGeo('CUBE'), undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMatStandard} attach="material" /></instancedMesh>
+      {group.cubes.length > 0 && (
         <instancedMesh renderOrder={1} ref={(el) => { refs.current.cubes = el! }} args={[getGeo('CUBE'), undefined, group.cubes.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
-      </>}
+      )}
+      {group.cubesOutline && group.cubesOutline.length > 0 && (
+        <instancedMesh ref={(el) => { outlineRefs.current.cubes = el! }} args={[getGeo('CUBE'), undefined, group.cubesOutline.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMatStandard} attach="material" /></instancedMesh>
+      )}  
+      {group.cubesOutlineFlat && group.cubesOutlineFlat.length > 0 && (
+        <instancedMesh ref={(el) => { outlineRefs.current.cubesOutlineFlat = el! }} args={[getGeo('CUBE'), undefined, group.cubesOutlineFlat.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMatFlatY} attach="material" /></instancedMesh>
+      )}
+      {group.cubesOutlinePivotTop && group.cubesOutlinePivotTop.length > 0 && (
+        <instancedMesh ref={(el) => { outlineRefs.current.cubesOutlinePivotTop = el! }} args={[getGeo('CUBE'), undefined, group.cubesOutlinePivotTop.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMatPivotTop} attach="material" /></instancedMesh>
+      )}  
+      {group.cubesOutlinePivotBottom && group.cubesOutlinePivotBottom.length > 0 && (
+        <instancedMesh ref={(el) => { outlineRefs.current.cubesOutlinePivotBottom = el! }} args={[getGeo('CUBE'), undefined, group.cubesOutlinePivotBottom.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMatPivotBottom} attach="material" /></instancedMesh>
+      )}
+
       {group.ramps.length > 0 && <>
         <instancedMesh ref={(el) => { outlineRefs.current.ramps = el! }} args={[getGeo('RAMP'), undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={outlineMatOffsetR} attach="material" /></instancedMesh>
         <instancedMesh renderOrder={1} ref={(el) => { refs.current.ramps = el! }} args={[getGeo('RAMP'), undefined, group.ramps.length]} onClick={onClick} onContextMenu={onContext} frustumCulled={false}><primitive object={activeMaterial} attach="material" /></instancedMesh>
@@ -654,8 +690,8 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
           const groupKey = `${matId}_${varId}`;
           if (!groups[groupKey]) {
             groups[groupKey] = {
-              cubes: [], ramps: [], traps: [], rampsDown: [], trapsDown: [],
-              roundFull: [], roundLeft: [], roundRight: [], roundTop: [], roundBottom: [], props: []
+              cubes: [], cubesOutline: [], cubesOutlineFlat: [], cubesOutlinePivotTop: [], cubesOutlinePivotBottom: [], ramps: [], traps: [],
+              rampsDown: [], trapsDown: [], roundFull: [], roundLeft: [], roundRight: [], roundTop: [], roundBottom: [], props: []
             };
           }
 
@@ -781,6 +817,7 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
             }
           }
           dummy.updateMatrix();
+     
 
           // 3. ASIGNACIÓN A ARRAYS
           if (shapeType === 'PROP') {
@@ -821,6 +858,32 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
           else {
             // CUBE
             groups[groupKey].cubes.push(dummy.matrix.clone());
+
+            const isInner = top && bottom && left && right;
+            if (!isInner) {
+              // 2. ¿El bloque de ARRIBA es Rampa o Trampa?
+              const t_top = isSolidGlobal(x, y + 2, z);
+              const t_left = isSolidGlobal(x - 1, y + 1, z);
+              const t_right = isSolidGlobal(x + 1, y + 1, z);
+              const topIsRampOrTrap = top && !t_top && ((t_left && !t_right) || (!t_left && t_right));
+
+              // 3. ¿El bloque de ABAJO es Rampa_Down o Trap_Down?
+              const b_bottom = isSolidGlobal(x, y - 2, z);
+              const b_left = isSolidGlobal(x - 1, y - 1, z);
+              const b_right = isSolidGlobal(x + 1, y - 1, z);
+              const bottomIsRampOrTrapDown = bottom && !b_bottom && ((b_left && !b_right) || (!b_left && b_right));
+
+              // 4. Asignación inteligente de contornos
+              if (topIsRampOrTrap && bottomIsRampOrTrapDown) {
+                groups[groupKey].cubesOutlineFlat.push(dummy.matrix.clone()); // Sandwich (Raro, pero cubierto)
+              } else if (topIsRampOrTrap) {
+                groups[groupKey].cubesOutlinePivotTop.push(dummy.matrix.clone()); // Crece hacia abajo (Llena el aire)
+              } else if (bottomIsRampOrTrapDown) {
+                groups[groupKey].cubesOutlinePivotBottom.push(dummy.matrix.clone()); // Crece hacia arriba
+              } else {
+                groups[groupKey].cubesOutline.push(dummy.matrix.clone()); // Default
+              }
+            }
             if (!top) addFace(planePhys, x, y + 0.5, z, -Math.PI / 2, 'x', geometriesToMerge);
             if (!bottom) addFace(planePhys, x, y - 0.5, z, Math.PI / 2, 'x', geometriesToMerge);
             if (!left) addFace(planePhys, x - 0.5, y, z, Math.PI / 2, 'y', geometriesToMerge);
