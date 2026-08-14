@@ -3,6 +3,7 @@ import { Stats, OrbitControls, PerspectiveCamera, OrthographicCamera } from '@re
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsType } from 'three-stdlib';
 import { useTerrainStore } from './stores/useTerrainStore';
+import { useCombatStore } from './stores/useCombatStore';
 import { Player } from './components/Player';
 import { Physics } from '@react-three/rapier';
 import { UI } from './components/LevelUI';
@@ -78,6 +79,7 @@ const CameraController = ({ isOrthographic, isShiftPressed }: { isOrthographic: 
 }
 
 export default function App() {
+  const appMode = useCombatStore((state) => state.appMode);
   const mapId = useTerrainStore((state) => state.mapId);
   const [isOrthographic, setIsOrthographic] = useState(true);
   const toggleCamera = () => setIsOrthographic(prev => !prev);
@@ -85,6 +87,27 @@ export default function App() {
 
   // 1. USAMOS EL NUEVO SISTEMA DE INPUT
   const isRotatePressed = useInputStore((state) => state.activeActions['ROTATE_CAMERA']);
+
+  useEffect(() => {
+    const unsubscribe = useInputStore.subscribe(
+      (state) => state.activeActions['TOGGLE_MODE'],
+      (isPressed) => {
+        if (isPressed) {
+          const currentAppMode = useCombatStore.getState().appMode;
+          if (currentAppMode === 'EDITOR') {
+            useTerrainStore.getState().saveSnapshot();
+            useCombatStore.getState().setMode('TRAINING');
+            useCombatStore.getState().setAppMode('COMBAT');
+          } else {
+            useTerrainStore.getState().restoreSnapshot();
+            useCombatStore.getState().setAppMode('EDITOR');
+          }
+        }
+      }
+    );
+
+    return unsubscribe;
+  }, []);
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
@@ -114,12 +137,12 @@ export default function App() {
           />
         )}
         <Background />
-        <Physics /*debug*/ gravity={[0, -20, 0]}>
+        <Physics debug={false} gravity={[0, -20, 0]}>
           <ambientLight intensity={1.5} />
           <directionalLight position={[100, 100, 100]} intensity={1.5} />
           <Terrain />
-          <PlacementGrid />
-          <Player key={mapId} />
+          {appMode === 'EDITOR' && <PlacementGrid />}
+          {appMode === 'COMBAT' && <Player key={`player_${mapId}`} />}
 
           {/* CONTROLADOR DE CÁMARA EXTRAÍDO */}
           <CameraController

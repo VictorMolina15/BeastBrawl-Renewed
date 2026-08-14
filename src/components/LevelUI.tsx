@@ -1,4 +1,5 @@
 import { useTerrainStore } from '../stores/useTerrainStore';
+import { useCombatStore } from '../stores/useCombatStore';
 import { MATERIALS_DB } from '../config/materials';
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -13,6 +14,11 @@ interface UIProps {
 }
 
 export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
+  const appMode = useCombatStore((state) => state.appMode);
+  const combatMode = useCombatStore((state) => state.mode);
+  const selectedWeapon = useCombatStore((state) => state.selectedWeapon);
+  const selectWeapon = useCombatStore((state) => state.selectWeapon);
+
   const undo = useTerrainStore((state) => state.undo);
   const redo = useTerrainStore((state) => state.redo);
   const saveLevel = useTerrainStore((state) => state.saveLevel);
@@ -76,6 +82,41 @@ export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
 
   return (
     <>
+    {/* 1. INDICADOR SUPERIOR DE MODO */}
+      <div 
+        style={{
+          position: 'fixed',
+          left: '42%',
+          backgroundColor: appMode === 'EDITOR' ? 'rgba(15, 23, 42, 0.85)' : 'rgba(180, 20, 20, 0.85)',
+          color: '#ffffff',
+          padding: '8px 16px',
+          margin: '8px',
+          borderRadius: '20px',
+          fontWeight: 'bold',
+          fontSize: '12px',
+          letterSpacing: '1px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          border: '1px solid rgba(255,255,255,0.2)',
+          backdropFilter: 'blur(8px)',
+          userSelect: 'none'
+        }}
+      >
+        <span 
+          style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: appMode === 'EDITOR' ? '#00ff88' : '#ffdd00',
+            boxShadow: appMode === 'EDITOR' ? '0 0 8px #00ff88' : '0 0 8px #ffdd00',
+            display: 'in-line-block',
+          }}
+        />
+        {appMode === 'EDITOR' ? 'MODO: EDITOR (TAB para probar)' : `MODO: PRUEBA / COMBATE (${combatMode})`}
+      </div>
       <div
         ref={cameraInfoRef}
         style={{
@@ -95,6 +136,47 @@ export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
       >
         Cargando cámara...
       </div>
+      {appMode === 'COMBAT' ? (
+        /* --- ACCIONES DE COMBATE (VISUAL) --- */
+        <div className="editor-hud" style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '15px', flexDirection: 'row', justifyContent: 'center', gap: '12px', height:'10vh', padding: '10px 20px' }}>
+          <button 
+            className={`ui-btn ${selectedWeapon === 'MELEE' ? 'active' : ''}`}
+            onClick={() => selectWeapon('MELEE')}
+            style={{ padding: '10px 18px', fontSize: '14px', fontWeight: 'bold' }}
+          >
+            🥊 Ataque Melee <span style={{ opacity: 0.7, fontSize: '11px', marginLeft: '6px' }}>(Stamina: 1)</span>
+          </button>
+
+          <button 
+            className={`ui-btn ${selectedWeapon === 'SLINGSHOT' ? 'active' : ''}`}
+            onClick={() => selectWeapon('SLINGSHOT')}
+            style={{ padding: '10px 18px', fontSize: '14px', fontWeight: 'bold' }}
+          >
+            🎯 Resortera <span style={{ opacity: 0.7, fontSize: '11px', marginLeft: '6px' }}>(Stamina: 2)</span>
+          </button>
+
+          <button 
+            className={`ui-btn ${selectedWeapon === 'RPG' ? 'active' : ''}`}
+            onClick={() => selectWeapon('RPG')}
+            style={{ padding: '10px 18px', fontSize: '14px', fontWeight: 'bold' }}
+          >
+            🚀 RPG <span style={{ opacity: 0.7, fontSize: '11px', marginLeft: '6px' }}>(Stamina: 7)</span>
+          </button>
+
+          <button 
+            className="ui-btn"
+            style={{ 
+              padding: '10px 18px', 
+              fontSize: '14px', 
+              fontWeight: 'bold',
+              background: 'linear-gradient(135deg, #ff8c00, #e60000)',
+              borderColor: '#ffaa00'
+            }}
+          >
+            🔥 Movimiento Especial
+          </button>
+        </div>
+      ) : (
       <div className="editor-hud">
 
         {/* FILA SUPERIOR */}
@@ -239,6 +321,7 @@ export function UI({ isOrthographic, toggleCamera, cameraInfoRef }: UIProps) {
           </button>
         </div>
       </div>
+      )}
 
       {/* --- PORTAL DEL POPUP (Fuera del flujo HTML normal) --- */}
       {/* Esto renderiza el div directamente en el <body> */}

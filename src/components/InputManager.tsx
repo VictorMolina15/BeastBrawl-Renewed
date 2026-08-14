@@ -9,6 +9,9 @@ export function InputManager() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        e.preventDefault(); 
+      }
       // Atajos de teclado para Deshacer/Rehacer
       if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'z') {

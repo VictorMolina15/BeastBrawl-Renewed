@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createNoise2D } from 'simplex-noise';
+import { MATERIALS_DB } from '../config/materials';
 
 const CHUNK_SIZE = 16;
 const WORLD_WIDTH_IN_CHUNKS = 8;
@@ -26,6 +27,16 @@ interface TerrainState {
   history: Array<Map<string, Uint8Array>>;
   future: Array<Map<string, Uint8Array>>;
   currentBiome: string;
+  damageMap: Map<string, number>;
+  damageVersion: number;
+  snapshot: {
+    chunks: Map<string, Uint8Array>;
+    variations: Map<string, Uint8Array>;
+    damageMap: Map<string, number>;
+  } | null;
+  saveSnapshot: () => void;
+  restoreSnapshot: () => void;
+  damageTerrain: (centerX: number, centerY: number, radius: number, damage: number) => void;
   setBiome: (biome: string) => void;
   generateNewMap: () => void;
   setBrushSize: (size: number) => void;
@@ -124,6 +135,7 @@ const modifyTerrain = (
 
         if (index >= 0 && index < chunkData.length) {
           chunkData[index] = modifyValue;
+          notifyNeighborChunks(x, y, chunkSize, newChunks, affectedChunks);
         }
       }
     }
@@ -134,6 +146,32 @@ const modifyTerrain = (
 };
 
 const initialData = createInitialChunks();
+
+const notifyNeighborChunks = (
+  worldX: number,
+  worldY: number,
+  chunkSize: number,
+  newChunks: Map<string, Uint8Array>,
+  affectedChunks: Map<string, Uint8Array>
+) => {
+  const chunkX = Math.floor(worldX / chunkSize);
+  const chunkY = Math.floor(worldY / chunkSize);
+  const localX = worldX - chunkX * chunkSize;
+  const localY = worldY - chunkY * chunkSize;
+
+  const touch = (nx: number, ny: number) => {
+    const key = `${nx},${ny},0`;
+    if (!affectedChunks.has(key) && newChunks.has(key)) {
+      const data = newChunks.get(key);
+      if (data) affectedChunks.set(key, new Uint8Array(data));
+    }
+  };
+
+  if (localX === 0) touch(chunkX - 1, chunkY);
+  if (localX === chunkSize - 1) touch(chunkX + 1, chunkY);
+  if (localY === 0) touch(chunkX, chunkY - 1);
+  if (localY === chunkSize - 1) touch(chunkX, chunkY + 1);
+};
 
 export const useTerrainStore = create<TerrainState>((set, get) => ({
   chunkSize: CHUNK_SIZE,
@@ -148,7 +186,32 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
   showGrid: true,
   history: [],
   future: [],
+  damageMap: new Map(),
+  damageVersion: 0, // Trigger para forzar re-render visual de daño
   currentBiome: 'EDITOR',
+  snapshot: null,
+  saveSnapshot: () => {
+    const { chunks, variations, damageMap } = get();
+    set({
+      snapshot: {
+        chunks: new Map(chunks), // Clonamos los Map para no mutar las referencias
+        variations: new Map(variations),
+        damageMap: new Map(damageMap)
+      }
+    });
+  },
+  restoreSnapshot: () => {
+    const { snapshot, mapId, damageVersion } = get();
+    if (!snapshot) return;
+
+    set({
+      chunks: new Map(snapshot.chunks),
+      variations: new Map(snapshot.variations),
+      damageMap: new Map(snapshot.damageMap),
+      mapId: mapId + 1, // Forzamos a Rapier a recalcular colisiones
+      damageVersion: damageVersion + 1 // Forzamos a los shaders a borrar las grietas
+    });
+  },
   setBiome: (biome: string) => {
     set({ currentBiome: biome });
   },
@@ -264,6 +327,158 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
       future: []
     }));
   },
+  damageTerrain: (centerX, centerY, radius, damageAmount) => {
+    const { chunks, chunkSize, damageMap, damageVersion } = get();
+    const newChunks = new Map(chunks);
+    const newDamageMap = new Map(damageMap);
+    const affectedChunks = new Map<string, Uint8Array>();
+
+    let destroyedAny = false;
+    let damagedAny = false;
+
+    // Helper SEGURO para refrescar vecinos
+    const touch = (nx: number, ny: number) => {
+      const key = `${nx},${ny},0`;
+      if (!affectedChunks.has(key) && newChunks.has(key)) {
+        const data = newChunks.get(key);
+        if (data) affectedChunks.set(key, new Uint8Array(data));
+      }
+    };
+
+    const applyDamageToVoxel = (x: number, y: number, z: number) => {
+      const chunkX = Math.floor(x / chunkSize);
+      const chunkY = Math.floor(y / chunkSize);
+      const chunkKey = `${chunkX},${chunkY},0`;
+
+      let chunkData = affectedChunks.get(chunkKey) || newChunks.get(chunkKey);
+      if (!chunkData) return;
+
+      const localX = x - chunkX * chunkSize;
+      const localY = y - chunkY * chunkSize;
+      const index = z * chunkSize * chunkSize + localY * chunkSize + localX;
+      
+      const voxelId = chunkData[index];
+      if (voxelId === 0) return; 
+
+      if (!affectedChunks.has(chunkKey)) {
+        chunkData = new Uint8Array(chunkData);
+        affectedChunks.set(chunkKey, chunkData);
+      }
+
+      const materialDef = MATERIALS_DB[voxelId];
+      const hardness = materialDef?.hardness || 1;
+      const globalKey = `${x},${y},${z}`;
+
+      if (hardness <= 0) {
+        chunkData[index] = 0;
+        destroyedAny = true;
+        if (localX === 0) touch(chunkX - 1, chunkY);
+        if (localX === chunkSize - 1) touch(chunkX + 1, chunkY);
+        if (localY === 0) touch(chunkX, chunkY - 1);
+        if (localY === chunkSize - 1) touch(chunkX, chunkY + 1);
+        return;
+      }
+
+      const currentDamage = newDamageMap.get(globalKey) || 0;
+      const nextDamage = currentDamage + damageAmount;
+
+      if (nextDamage >= hardness) {
+        chunkData[index] = 0; 
+
+        newDamageMap.set(globalKey, nextDamage); 
+        
+        destroyedAny = true;
+        if (localX === 0) touch(chunkX - 1, chunkY);
+        if (localX === chunkSize - 1) touch(chunkX + 1, chunkY);
+        if (localY === 0) touch(chunkX, chunkY - 1);
+        if (localY === chunkSize - 1) touch(chunkX, chunkY + 1);
+      } else {
+        newDamageMap.set(globalKey, nextDamage); 
+        damagedAny = true;
+      }
+    };
+
+    // =========================================================
+    // 1. ESCÁNER RECUPERADO (Obligatorio para la resortera)
+    // =========================================================
+    let targetX = Math.round(centerX);
+    let targetY = Math.round(centerY);
+    const targetZ = 0; 
+
+    let minDist = Infinity;
+    let foundSolid = false;
+    const baseRx = Math.round(centerX);
+    const baseRy = Math.round(centerY);
+
+    // Escaneamos 3x3 para anclarnos al bloque físico real
+    for (let ox = -1; ox <= 1; ox++) {
+      for (let oy = -1; oy <= 1; oy++) {
+        const tx = baseRx + ox;
+        const ty = baseRy + oy;
+        
+        const cx = Math.floor(tx / chunkSize);
+        const cy = Math.floor(ty / chunkSize);
+        const cData = newChunks.get(`${cx},${cy},0`);
+        
+        if (cData) {
+          const lx = tx - cx * chunkSize;
+          const ly = ty - cy * chunkSize;
+          if (lx >= 0 && lx < chunkSize && ly >= 0 && ly < chunkSize) {
+             const idx = targetZ * chunkSize * chunkSize + ly * chunkSize + lx;
+             if (cData[idx] !== 0) {
+               const dist = (tx - centerX) * (tx - centerX) + (ty - centerY) * (ty - centerY);
+               if (dist < minDist) {
+                 minDist = dist;
+                 targetX = tx;
+                 targetY = ty;
+                 foundSolid = true;
+               }
+             }
+          }
+        }
+      }
+    }
+
+    if (!foundSolid) return;
+
+    // =========================================================
+    // 2. APLICAR DAÑO (Modos Armónicos)
+    // =========================================================
+    if (radius === 0) {
+      // RESORTERA: Impacto matemático directo
+      applyDamageToVoxel(targetX, targetY, targetZ);
+    } else {
+      const searchRadius = Math.ceil(radius) + 1; 
+
+      for (let x = targetX - searchRadius; x <= targetX + searchRadius; x++) {
+        for (let y = targetY - searchRadius; y <= targetY + searchRadius; y++) {
+          const dx = Math.abs(x - targetX);
+          const dy = Math.abs(y - targetY);
+          const distance = Math.round(Math.sqrt(dx * dx + dy * dy));
+          
+          if (distance <= radius) {
+            applyDamageToVoxel(x, y, targetZ);
+          }
+        }
+      }
+    }
+
+    if (destroyedAny) get().pushHistory();
+
+    if (destroyedAny) {
+      affectedChunks.forEach((value, key) => newChunks.set(key, value));
+      set({
+        chunks: newChunks,
+        damageMap: newDamageMap,
+        damageVersion: damageVersion + 1
+      });
+    } else if (damagedAny) {
+      set({
+        damageMap: newDamageMap,
+        damageVersion: damageVersion + 1
+      });
+    }
+  },
   destroyTerrain: (centerX, centerY, radius) => {
     get().pushHistory();
     set((state) => ({
@@ -272,10 +487,43 @@ export const useTerrainStore = create<TerrainState>((set, get) => ({
     }));
   },
   createTerrain: (centerX, centerY, radius, materialId) => {
+    const { brushSize, selectedVariationId, damageMap } = get();
+    const effectiveRadius = radius || brushSize;
+
     get().pushHistory();
+
+    // 1. Clonar el mapa de daño para limpiar las coordenadas del nuevo bloque
+    const newDamageMap = new Map(damageMap);
+    let cleanedAnyDamage = false;
+
+    const minX = Math.floor(centerX - effectiveRadius);
+    const maxX = Math.ceil(centerX + effectiveRadius);
+    const minY = Math.floor(centerY - effectiveRadius);
+    const maxY = Math.ceil(centerY + effectiveRadius);
+    const radiusSq = effectiveRadius * effectiveRadius;
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const dx = x - centerX;
+        const dy = y - centerY;
+        if (dx * dx + dy * dy <= radiusSq) {
+          for (let z = 0; z < TERRAIN_THICKNESS; z++) {
+            const globalKey = `${x},${y},${z}`;
+            if (newDamageMap.has(globalKey)) {
+              newDamageMap.delete(globalKey);
+              cleanedAnyDamage = true;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Actualizar el estado con el mapa de daño limpio y el incremento de versión
     set((state) => ({
-      chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, radius, materialId),
-      variations: modifyTerrain(state.variations, state.chunkSize, centerX, centerY, radius, state.selectedVariationId)
+      chunks: modifyTerrain(state.chunks, state.chunkSize, centerX, centerY, effectiveRadius, materialId),
+      variations: modifyTerrain(state.variations, state.chunkSize, centerX, centerY, effectiveRadius, selectedVariationId),
+      damageMap: newDamageMap,
+      damageVersion: cleanedAnyDamage ? state.damageVersion + 1 : state.damageVersion
     }));
   },
   // --- IMPLEMENTACIÓN DE getVoxel ---

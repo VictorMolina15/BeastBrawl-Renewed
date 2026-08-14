@@ -54,3 +54,15 @@ Próximos pasos: Diseñar e implementar más fondos e intentar añadir el Cell S
  y el 2do deshabilita el renderizado del background.
 
  Próximo pasos: solucionar los errores anteriormente planteados
+
+ === DEV VERSION 1.3.1 [11 de Julio 2026] ===
+ - Se mejoró el shader para tener el mejor resultado visual y de rendimiento, el método es un Inverted hull optimizado.
+ - Se optimizó el manejo de instancias de chunk.tsx
+
+ === DEV VERSION 1.4 [14 de Agosto 2026] ===
+ - Primer prototipo del sistema de combate, se añadieron las mécanicas de resortera y RPG para hacer pruebas de destrucción
+ - El juego ahora puede alternar entre modo edición y pruebas (combate libre) pulsando TAB, al entrar al modo prueba se guarda
+ una snapshot del mapa por lo que al volver al modo edición se retomará el mapa previo al cambio.
+ - Nuevo shader temporal para la destrucción de bloques: VoxDamageShader.ts
+ - Se mejoró aún más la forma en la que el juego maneja la creación/destrucción de bloques, siendo que ahora se maneja por 
+ los chunks directamente afectados en lugar de calcular todos a la vez haciendo que el juego ya no tenga los tirones de antes.

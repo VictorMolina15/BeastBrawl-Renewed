@@ -16,6 +16,11 @@
   user-select: none;
 }
 
+.ui-btn {
+  border: none;
+  cursor: pointer;
+}
+
 /* Fila Superior: Controles Principales */
 .hud-main-row {
   display: flex;

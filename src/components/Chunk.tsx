@@ -1,14 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React from 'react';
 import { RigidBody, TrimeshCollider } from '@react-three/rapier';
 import { useTerrainStore } from '../stores/useTerrainStore';
+import { useCombatStore } from '../stores/useCombatStore';
 import * as THREE from 'three';
 import { mergeBufferGeometries } from 'three-stdlib';
 import { MATERIALS_DB, ATLAS_CONFIG } from '../config/materials';
 import { useGLTF, useTexture } from '@react-three/drei';
-import { patchSolidGrassMaterial, patchPropMaterial } from '../shaders';
+import { patchSolidGrassMaterial, patchPropMaterial, patchDamageMaterial } from '../shaders';
 import { OutlineShader } from '../shaders/OutlineShader';
 import { useFrame } from '@react-three/fiber';
+
 
 useGLTF.preload('/models/cubes/grass/GrassCubes_set.glb');
 useGLTF.preload('/models/cubes/base/BaseCubes_set.glb');
@@ -179,13 +182,11 @@ type RenderGroup = {
 
 };
 
-const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
-
 // ==========================================
 // 2. SUB-COMPONENTE: CHUNK LAYER
 // Se encarga de renderizar UN material específico.
 // ==========================================
-const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes, grassMaterial, baseTexture }: {
+const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes, grassMaterial, baseTexture,chunkPos }: {
   groupKey: string,
   group: RenderGroup,
   onClick: (e: unknown) => void,
@@ -194,6 +195,7 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   grassNodes: any,
   grassMaterial: THREE.Material, // Material del pasto
   baseTexture: THREE.Texture // Textura base
+  chunkPos: [number, number, number],
 }) => {
   const refs = useRef<Record<string, THREE.InstancedMesh>>(null!);
   const outlineRefs = useRef<Record<string, THREE.InstancedMesh>>(null!);
@@ -240,7 +242,7 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   // 1. Definir Color (Tinte)
   let targetColorHex = '#ffffff';
   if (materialDef) {
-    const variation = materialDef.variations?.[varId];
+    const variation = materialDef?.variations?.[varId];
     targetColorHex = variation ? variation.color : materialDef.color;
   }
 
@@ -251,17 +253,16 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   // Seleccionar material: Si es Grass usamos el shader especial, si no, uno estándar simple
   // --- LÓGICA DE MATERIAL INTELIGENTE ---
   const activeMaterial = useMemo(() => {
-    // 1. EL PASTO SE MANEJA APARTE (Shader especial)
     if (isGrass) return grassMaterial;
-    // 2. BUSCAR TEXTURA (Lógica de Prioridad)
-    const variation = materialDef.variations?.[varId];
-    const effectiveAtlasPos = variation?.atlasPos || materialDef.atlasPos;
+
+    const variation = materialDef?.variations?.[varId];
+    const effectiveAtlasPos = variation?.atlasPos || materialDef?.atlasPos;
     const effectiveColor = isProp ? '#FFFFFF' : targetColorHex;
 
-    // 3. GENERAR MATERIAL
-    if (effectiveAtlasPos && baseTexture) {
+    let mat: THREE.Material;
 
-      const mat = isProp ? new THREE.MeshStandardMaterial({
+    if (effectiveAtlasPos && baseTexture) {
+      mat = isProp ? new THREE.MeshStandardMaterial({
         map: baseTexture.clone(),
         roughness: 0.8,
         transparent: isProp,
@@ -278,37 +279,33 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
         color: effectiveColor,
       });
 
-      if (mat.map) {
+      if ((mat as THREE.MeshToonMaterial).map) {
         const EPSILON = 0.0016;
         const cols = ATLAS_CONFIG.cols;
         const rows = ATLAS_CONFIG.rows;
-        mat.map.repeat.set((1 / cols) - (2 * EPSILON), (1 / rows) - (2 * EPSILON));
-        mat.map.offset.x = (effectiveAtlasPos.x / cols) + EPSILON;
-        mat.map.offset.y = (effectiveAtlasPos.y / rows) + EPSILON;
+        (mat as THREE.MeshToonMaterial).map!.repeat.set((1 / cols) - (2 * EPSILON), (1 / rows) - (2 * EPSILON));
+        (mat as THREE.MeshToonMaterial).map!.offset.x = (effectiveAtlasPos.x / cols) + EPSILON;
+        (mat as THREE.MeshToonMaterial).map!.offset.y = (effectiveAtlasPos.y / rows) + EPSILON;
       }
-
-      // === CORRECCIÓN VISUAL: SHADER DE VIENTO (Solo Props) ===
-      if (isProp) {
-        // Inicializamos el objeto de tiempo en el material
-        mat.userData = { uTime: { value: 0 } };
-        mat.onBeforeCompile = (shader) => {
-          patchPropMaterial(shader);
-          shader.uniforms.uTime = mat.userData.uTime;
-        };
-        mat.customProgramCacheKey = () => 'prop_smart_shader';
-      }
-
-      return mat;
+    } else {
+      mat = new THREE.MeshToonMaterial({
+        color: effectiveColor || 'white',
+        gradientMap: toonGradientMap,
+      });
     }
 
-    // Fallback para materiales sin textura
-    return new THREE.MeshToonMaterial({
-      color: effectiveColor || 'white',
-      gradientMap: toonGradientMap,
-    });
+    mat.userData = { uTime: { value: 0 } };
+    mat.onBeforeCompile = (shader) => {
+      if (isProp) {
+        patchPropMaterial(shader);
+        shader.uniforms.uTime = mat.userData.uTime;
+      }
+      patchDamageMaterial(shader);
+    };
+    mat.customProgramCacheKey = () => `damage_mat_v10_${matId}_${varId}`;
 
-  }, [isGrass, isProp, grassMaterial, materialDef, baseTexture, varId, targetColorHex, toonGradientMap]);
-
+    return mat;
+  }, [isGrass, isProp, grassMaterial, materialDef, baseTexture, varId, targetColorHex, toonGradientMap, matId]);
   // Hook de animación para el viento (actualiza el material generado arriba)
   useFrame((state) => {
     if (isProp && activeMaterial.userData?.uTime) {
@@ -316,44 +313,49 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
     }
   });
 
-  const capacities = useRef<Record<string, number>>({});
-  
-  const getCapacity = (shapeKey: string, currentLength: number) => {
-    // Si no hay bloques y nunca existió este mesh, no reservamos memoria
-    if (currentLength === 0 && !capacities.current[shapeKey]) return 0; 
-    
-    let cap = capacities.current[shapeKey] || 32; // Iniciamos con 32 espacios
-    if (cap < currentLength) {
-      while (cap < currentLength) cap *= 2; // Duplicar tamaño si nos quedamos sin espacio
-    }
-    capacities.current[shapeKey] = cap;
-    return cap;
-  };
-
-  // Helper para actualizar matrices con Object Pooling
-  const updateRef = (targetRefs: Record<string, THREE.InstancedMesh>, key: string, matrices: THREE.Matrix4[]) => {
+  const updateMatrices = (targetRefs: Record<string, THREE.InstancedMesh>, key: string, matrices: THREE.Matrix4[]) => {
     const mesh = targetRefs[key];
     const dataLength = matrices ? matrices.length : 0;
-
-    if (mesh) {
-      const capacity = capacities.current[key] || 32;
-      
-      for (let i = 0; i < capacity; i++) {
-        if (i < dataLength) {
-          // Asignar matriz real al bloque
-          mesh.setMatrixAt(i, matrices[i]);
-          
-          if (isGrass || isProp) {
-            mesh.setColorAt(i, new THREE.Color(targetColorHex));
-          }
-        } else {
-          // "Esconder" en (0,0,0) sin destruir la memoria del InstancedMesh
-          mesh.setMatrixAt(i, ZERO_MATRIX);
+    if (mesh && mesh.geometry) {
+      for (let i = 0; i < dataLength; i++) {
+        mesh.setMatrixAt(i, matrices[i]);
+        if (isGrass || isProp) {
+          mesh.setColorAt(i, new THREE.Color(targetColorHex));
         }
       }
       mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.geometry) mesh.computeBoundingSphere();
+      mesh.computeBoundingSphere();
       if ((isGrass || isProp) && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+  };
+
+  // 2. Solo actualiza los atributos de las grietas en el shader
+  const applyDamageToMesh = (targetRefs: Record<string, THREE.InstancedMesh>, key: string, matrices: THREE.Matrix4[], currentDamageMap: Map<string, number>) => {
+    const mesh = targetRefs[key];
+    const dataLength = matrices ? matrices.length : 0;
+    
+    if (mesh && mesh.geometry) {
+      const damageAttr = mesh.geometry.attributes.aDamageStage as THREE.InstancedBufferAttribute;
+      if (!damageAttr) return;
+
+      const isOutline = targetRefs === outlineRefs.current;
+      const hardness = materialDef?.hardness || 1;
+      const tempPos = new THREE.Vector3();
+
+      for (let i = 0; i < dataLength; i++) {
+        tempPos.setFromMatrixPosition(matrices[i]);
+        const gx = Math.round(tempPos.x + chunkPos[0]);
+        const gy = Math.round(tempPos.y + chunkPos[1]);
+        const gz = Math.round(tempPos.z + chunkPos[2]);
+        const currentDamage = currentDamageMap.get(`${gx},${gy},${gz}`) || 0;
+        
+        let damageStage = 0;
+        if (currentDamage > 0 && hardness > 0 && !isOutline) {
+          damageStage = Math.floor((currentDamage / hardness) * 4) + 1;
+        }
+        damageAttr.setX(i, damageStage);
+      }
+      damageAttr.needsUpdate = true;
     }
   };
 
@@ -429,19 +431,55 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   const trapDownGeo = useMemo(() => createUpsideDownGeometry(baseNodes.TrapBase?.geometry || trapGeoVisual), [baseNodes]);
 
   useLayoutEffect(() => {
-    // 1. Actualizamos todos los meshes de Color principal
-    Object.keys(refs.current).forEach(key => {
-      updateRef(refs.current, key, group[key as keyof RenderGroup]);
-    });
+    const currentDamageMap = useTerrainStore.getState().damageMap;
 
-    // 2. Actualizamos todos los meshes de Outline 
+    Object.keys(refs.current).forEach(key => {
+      const data = group[key as keyof RenderGroup];
+      updateMatrices(refs.current, key, data);
+      applyDamageToMesh(refs.current, key, data, currentDamageMap);
+    });
     Object.keys(outlineRefs.current).forEach(key => {
-      // Si la key de outline existe en el grupo (ej. cubesOutlineFlat), la usa.
-      // Si no (ej. ramps), usa la key base de la forma (group['ramps']).
       const data = group[key as keyof RenderGroup] || group[key.replace('Outline', '') as keyof RenderGroup];
-      updateRef(outlineRefs.current, key, data);
+      updateMatrices(outlineRefs.current, key, data);
+      applyDamageToMesh(outlineRefs.current, key, data, currentDamageMap);
     });
   }, [group]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let hadDamage = false;
+
+    return useTerrainStore.subscribe((state, prevState) => {
+      if (state.damageVersion === prevState.damageVersion) return;
+
+      const damageMap = state.damageMap;
+      
+      // Filtro hiper-rápido: ¿La explosión tocó ESTE chunk en específico?
+      let hasDamageNow = false;
+      for (const key of damageMap.keys()) {
+        const [gx, gy, gz] = key.split(',').map(Number);
+        if (gx >= chunkPos[0] && gx < chunkPos[0] + 16 &&
+            gy >= chunkPos[1] && gy < chunkPos[1] + 16 &&
+            gz >= chunkPos[2] && gz < chunkPos[2] + 16) {
+          hasDamageNow = true;
+          break;
+        }
+      }
+
+      // Si no nos afecta en lo absoluto, cancelamos (Ahorro del 98% de CPU)
+      if (!hasDamageNow && !hadDamage) return;
+
+      // Si nos afecta, inyectamos la máscara de daño en la GPU
+      Object.keys(refs.current).forEach(key => {
+        applyDamageToMesh(refs.current, key, group[key as keyof RenderGroup], damageMap);
+      });
+      Object.keys(outlineRefs.current).forEach(key => {
+        const data = group[key as keyof RenderGroup] || group[key.replace('Outline', '') as keyof RenderGroup];
+        applyDamageToMesh(outlineRefs.current, key, data, damageMap);
+      });
+
+      hadDamage = hasDamageNow;
+    });
+  }, [group, chunkPos, materialDef]);
 
   const getGeo = (shape: string) => {
     if (isGrass) {
@@ -483,7 +521,7 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
   };
 
   // Helper para construir el InstancedMesh dinámico
-  const renderMesh = (
+ const renderMesh = (
     refDict: React.MutableRefObject<Record<string, THREE.InstancedMesh>>,
     refKey: string,
     geoShape: string,
@@ -492,18 +530,24 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
     renderOrder?: number
   ) => {
     const length = dataArray?.length || 0;
-    const cap = getCapacity(refKey, length);
-    if (cap === 0) return null; // No renderizar si no hay capacidad ni datos
+    const baseGeo = getGeo(geoShape);
+    
+    // Instanciamos la geometría con la memoria máxima absoluta
+    const uniqueGeo = useMemo(() => {
+      const clone = baseGeo.clone();
+      clone.setAttribute('aDamageStage', new THREE.InstancedBufferAttribute(new Float32Array(4096), 1));
+      return clone;
+    }, [baseGeo]);
 
-    // CORRECCIÓN: Identificador único para que React no fusione el bloque base con su outline
     const isOutline = refDict === outlineRefs;
     const prefix = isOutline ? 'outline' : 'base';
 
     return (
       <instancedMesh
-        key={`${prefix}_${refKey}_${cap}`} // Ej: 'base_traps_32' o 'outline_traps_32'
+        key={`${prefix}_${refKey}`} // <-- Eliminamos variables dinámicas de la llave
         ref={(el) => { refDict.current[refKey] = el! }}
-        args={[getGeo(geoShape), undefined, cap]}
+        args={[uniqueGeo, undefined, 4096]}
+        count={length} // <-- Three.js ignora lo que exceda este número
         onClick={onClick}
         onContextMenu={onContext}
         frustumCulled={false}
@@ -566,12 +610,14 @@ const ChunkLayer = ({ groupKey, group, onClick, onContext, baseNodes, grassNodes
 // 3. COMPONENTE PRINCIPAL: CHUNK
 // ==========================================
 
-export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
+export const Chunk = React.memo(
+function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
   const createTerrain = useTerrainStore(state => state.createTerrain);
   const destroyTerrain = useTerrainStore(state => state.destroyTerrain);
   const brushSize = useTerrainStore(state => state.brushSize);
   const selectedMaterialId = useTerrainStore(state => state.selectedMaterialId);
   const getGlobalVoxel = useTerrainStore(state => state.getVoxel);
+  
 
   // 1. CARGAR ASSETS
   const { nodes: grassNodes } = useGLTF('/models/cubes/grass/GrassCubes_set.glb') as any;
@@ -594,27 +640,27 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
 
   // 2. CONFIGURAR MATERIAL DE PASTO
   const grassMaterial = useMemo(() => {
-    textureAtlas.flipY = false;
+      textureAtlas.flipY = false;
+      textureAtlas.magFilter = THREE.NearestFilter;
+      textureAtlas.minFilter = THREE.NearestFilter;
+      textureAtlas.colorSpace = THREE.SRGBColorSpace;
+      textureAtlas.needsUpdate = true;
 
-    // Configuración Pixel Art 
-    textureAtlas.magFilter = THREE.NearestFilter;
-    textureAtlas.minFilter = THREE.NearestFilter;
-    textureAtlas.colorSpace = THREE.SRGBColorSpace;
-    textureAtlas.needsUpdate = true; // Aseguramos que Three.js procese el cambio
-
-    const mat = new THREE.MeshStandardMaterial({
-      map: textureAtlas,
-      vertexColors: true,
-      roughness: 1,
-      transparent: true,
-      alphaTest: 0.5,
-      side: THREE.DoubleSide,
-    });
-    // Inyectamos el shader
-    mat.onBeforeCompile = patchSolidGrassMaterial; // Usamos el parche SIN viento
-    mat.customProgramCacheKey = () => 'solid_grass_v2';
-    return mat;
-  }, [textureAtlas]);
+      const mat = new THREE.MeshStandardMaterial({
+        map: textureAtlas,
+        vertexColors: true,
+        roughness: 1,
+        transparent: true,
+        alphaTest: 0.5,
+        side: THREE.DoubleSide,
+      });
+      mat.onBeforeCompile = (shader) => {
+        patchDamageMaterial(shader);
+        patchSolidGrassMaterial(shader);
+      };
+      mat.customProgramCacheKey = () => 'solid_grass_v10_damage';
+      return mat;
+    }, [textureAtlas]);
 
 
   // Helper functions
@@ -930,12 +976,14 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
 
   // Handlers 
   const handleClick = (e: any) => {
+    if (useCombatStore.getState().appMode === 'COMBAT') return;
     e.stopPropagation();
     if (!e.face) return;
     const newPos = new THREE.Vector3().copy(e.point).add(e.face.normal.clone().multiplyScalar(0.5));
     createTerrain(newPos.x, newPos.y, brushSize, selectedMaterialId);
   };
   const handleContext = (e: any) => {
+    if (useCombatStore.getState().appMode === 'COMBAT') return;
     e.stopPropagation();
     e.nativeEvent.preventDefault();
     if (!e.face) return;
@@ -944,24 +992,37 @@ export function Chunk({ data, variations, position, chunkSize }: ChunkProps) {
   };
 
   return (
-    <RigidBody type="fixed" colliders={false} position={position}>
-      {physicsData.vertices.length > 0 && (
-        <TrimeshCollider args={[physicsData.vertices, physicsData.indices]} />
-      )}
+      <RigidBody type="fixed" colliders={false} position={position}>
+        {physicsData.vertices.length > 0 && (
+          <TrimeshCollider args={[physicsData.vertices, physicsData.indices]} />
+        )}
 
-      {Object.keys(renderGroups).map((key) => (
-        <ChunkLayer
-          key={key}
-          groupKey={key}
-          group={renderGroups[key]}
-          onClick={handleClick}
-          onContext={handleContext}
-          baseNodes={baseNodes}
-          grassNodes={grassNodes}
-          grassMaterial={grassMaterial}
-          baseTexture={textureAtlas}
-        />
-      ))}
-    </RigidBody>
-  );
-}
+        {Object.keys(renderGroups).map((key) => (
+          <ChunkLayer
+            key={key}
+            groupKey={key}
+            group={renderGroups[key]}
+            onClick={handleClick}
+            onContext={handleContext}
+            baseNodes={baseNodes}
+            grassNodes={grassNodes}
+            grassMaterial={grassMaterial}
+            baseTexture={textureAtlas}
+            chunkPos={position} 
+          />
+        ))}
+      </RigidBody>
+    );
+},
+// FUNCIÓN DE IGUALDAD ESTRICTA: Solo re-renderiza si la RAM del chunk cambió
+  (prevProps, nextProps) => {
+    // Como Zustand clona los Uint8Array solo de los chunks modificados,
+    // podemos comparar por referencia de memoria (===). Si es la misma, el chunk no fue tocado.
+    return (
+      prevProps.data === nextProps.data &&
+      prevProps.variations === nextProps.variations &&
+      prevProps.position[0] === nextProps.position[0] &&
+      prevProps.position[2] === nextProps.position[2]
+    );
+  }
+);

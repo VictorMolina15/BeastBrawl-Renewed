@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 
 // 1. DEFINIR LAS ACCIONES (Lo que el jugador PUEDE hacer)
-export type InputAction = 'ROTATE_CAMERA' | 'MOVE_FORWARD' | 'MOVE_BACK' | 'MOVE_LEFT' | 'MOVE_RIGHT' | 'SPRINT' | 'JUMP';
+export type InputAction = 'ROTATE_CAMERA' | 'MOVE_FORWARD' | 'MOVE_BACK' | 'MOVE_LEFT' | 'MOVE_RIGHT' | 'SPRINT' | 'JUMP' | 'TOGGLE_MODE';
 
 // 2. DEFINIR EL MAPA POR DEFECTO (Qué tecla activa qué acción)
 interface InputState {
@@ -26,7 +26,8 @@ export const useInputStore = create<InputState>()(subscribeWithSelector((set) =>
     'MOVE_LEFT': 'a',
     'MOVE_RIGHT': 'd',
     'SPRINT': 'Control',
-    'JUMP': ' '
+    'JUMP': ' ',
+    'TOGGLE_MODE': 'Tab'
   },
 
   // ESTADO EN TIEMPO REAL
@@ -37,7 +38,8 @@ export const useInputStore = create<InputState>()(subscribeWithSelector((set) =>
     'MOVE_LEFT': false,
     'MOVE_RIGHT': false,
     'SPRINT': false,
-    'JUMP': false
+    'JUMP': false,
+    'TOGGLE_MODE': false
   },
 
   setKeyBinding: (action, newKey) => set((state) => ({

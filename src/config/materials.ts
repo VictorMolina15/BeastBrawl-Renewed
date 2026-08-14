@@ -30,7 +30,7 @@ export const MATERIALS_DB: Record<number, MaterialDef> = {
     type: 'BASE',
     color: '#FFF',
     atlasPos: { x: 0, y: 0 },
-    hardness: 10,
+    hardness: 20,
     variations: {
       0: { id: 0, name: 'Normal', color: '#FFF', atlasPos: { x: 0, y: 0 } },
       1: { id: 1, name: 'Otoñal', color: '#D2691E' },
@@ -57,7 +57,7 @@ export const MATERIALS_DB: Record<number, MaterialDef> = {
     name: 'Ladrillo',
     type: 'BASE',
     color: '#B22222',
-    hardness: 30,
+    hardness: 35,
     variations: {
       0: { id: 0, name: 'Rojo', color: '#B22222' },
       1: { id: 1, name: 'Marrón', color: '#8B4513' },
@@ -81,7 +81,7 @@ export const MATERIALS_DB: Record<number, MaterialDef> = {
     type: 'GRASS',
     color: '#228B22',
     atlasPos: { x: 1, y: 0 },
-    hardness: 5,
+    hardness: 20,
     variations: {
       0: { id: 0, name: 'Verde', color: '#37c237' },
       1: { id: 1, name: 'Otoñal', color: '#f37d2a' }, // Naranja

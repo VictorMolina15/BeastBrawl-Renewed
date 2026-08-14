@@ -1,8 +1,9 @@
 import { useFrame } from '@react-three/fiber';
-import { CapsuleCollider, CoefficientCombineRule, RapierCollider, RapierRigidBody, RigidBody, useRapier } from '@react-three/rapier';
+import { CapsuleCollider, CoefficientCombineRule, RapierCollider, RapierRigidBody, RigidBody, interactionGroups, useRapier } from '@react-three/rapier';
 import { useEffect, useRef, useMemo } from 'react';
 import { useInputStore } from '../stores/useInputStore';
-import { Outlines } from '@react-three/drei'; // <-- IMPORTAMOS OUTLINES
+import { Outlines } from '@react-three/drei'; 
+import { WeaponSystem } from './combat/WeaponSystem';
 import * as THREE from 'three';
 
 const MOVE_SPEED = 5;
@@ -80,9 +81,11 @@ export function Player() {
   }, []);
 
   return (
+    <>
     <RigidBody
       ref={rigidBodyRef}
       colliders={false}
+      collisionGroups={interactionGroups(1, [0])}
       mass={1}
       lockRotations
       position={[0, 75, 0]}
@@ -108,6 +111,8 @@ export function Player() {
         {/* 3. EL BORDE NEGRO (Inverted Hull) */}
         <Outlines thickness={2} color="black" />
       </mesh>
-    </RigidBody>
+    </RigidBody> 
+    <WeaponSystem playerRef={rigidBodyRef} />
+  </>
   );
 }
